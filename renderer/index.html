@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPT Editor</title>
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- CDN Libraries (UMD, loaded before module scripts) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
+  <div id="toolbar">
+    <span id="logo">PPT</span>
+
+    <button class="toolbar-btn" id="sidebar-toggle-btn" title="切换侧栏">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="1" width="14" height="14" rx="2"/>
+        <line x1="5" y1="1" x2="5" y2="15"/>
+      </svg>
+    </button>
+
+    <button class="toolbar-btn" id="open-btn" title="打开文件 (Ctrl+O)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M2 4h5l1.5 1.5H14V13H2V4z"/>
+      </svg>
+      打开
+    </button>
+
+    <button class="toolbar-btn" id="save-btn" title="保存 (Ctrl+S)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 2h8l3 3v9H2V2zM5 2v4h6V2M5 9h6v5H5z"/>
+      </svg>
+      保存
+    </button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="toolbar-btn" id="undo-btn" title="撤销 (Ctrl+Z)" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3 8a5 5 0 1 1 1.5 3.5"/>
+        <polyline points="1,5 3,8 6,6"/>
+      </svg>
+    </button>
+
+    <button class="toolbar-btn" id="redo-btn" title="重做 (Ctrl+Y)" disabled>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M13 8a5 5 0 1 0-1.5 3.5"/>
+        <polyline points="15,5 13,8 10,6"/>
+      </svg>
+    </button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="toolbar-btn primary" id="ai-toggle-btn" title="AI 生成">
+      ✨ AI 生成
+    </button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="toolbar-btn" id="edit-mode-btn" title="源码编辑">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <polyline points="5,4 1,8 5,12"/>
+        <polyline points="11,4 15,8 11,12"/>
+        <line x1="9" y1="2" x2="7" y2="14"/>
+      </svg>
+      源码
+    </button>
+
+    <button class="toolbar-btn" id="present-btn" title="全屏演示 (F5)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="1" y="3" width="14" height="10" rx="1"/>
+        <polyline points="6,6 10,8 6,10"/>
+      </svg>
+      演示
+    </button>
+
+    <div class="toolbar-sep"></div>
+
+    <button class="toolbar-btn" id="export-btn" title="导出">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M8 2v9M5 8l3 3 3-3M2 12v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1"/>
+      </svg>
+      导出
+    </button>
+
+    <div class="toolbar-spacer"></div>
+
+    <button class="toolbar-btn" id="settings-btn" title="设置">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="8" cy="8" r="2.5"/>
+        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+      </svg>
+    </button>
+  </div><!-- /toolbar -->
+
+  <!-- ── Workspace ───────────────────────────────────────────────────── -->
+  <div id="workspace">
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <span>幻灯片</span>
+        <span id="slide-count">0 页</span>
+      </div>
+      <div id="thumbnails"></div>
+    </div>
+
+    <!-- Main Area -->
+    <div id="main-area">
+      <div id="preview-container">
+        <!-- Welcome Screen -->
+        <div id="welcome">
+          <div id="welcome-icon">🖼</div>
+          <h2>PPT HTML Editor</h2>
+          <p>打开一个 HTML PPT 文件开始编辑<br>或使用 AI 生成全新的演示文稿<br><br>支持拖拽文件到此处</p>
+        </div>
+
+        <!-- Preview Wrapper -->
+        <div id="preview-wrapper">
+          <iframe
+            id="main-preview"
+            sandbox="allow-scripts allow-same-origin"
+            title="幻灯片预览"
+          ></iframe>
+          <div id="visual-overlay"></div>
+        </div>
+      </div>
+
+      <!-- Page Nav -->
+      <div id="page-nav">
+        <button class="nav-btn" id="prev-btn" disabled title="上一页 (←)">&#8592;</button>
+        <span id="page-info">0 / 0</span>
+        <button class="nav-btn" id="next-btn" disabled title="下一页 (→)">&#8594;</button>
+      </div>
+    </div><!-- /main-area -->
+
+    <!-- AI Panel -->
+    <div id="ai-panel" class="collapsed">
+      <div id="ai-panel-header">
+        <span>✨ AI 助手</span>
+        <button class="toolbar-btn" id="ai-panel-close-btn" style="height:24px;padding:0 6px;" title="关闭">✕</button>
+      </div>
+      <div id="ai-panel-body">
+
+        <!-- Tabs -->
+        <div class="ai-tabs">
+          <button class="ai-tab active" id="ai-tab-generate">全新生成</button>
+          <button class="ai-tab" id="ai-tab-modify">修改当前页</button>
+        </div>
+
+        <!-- Generate Form -->
+        <div id="ai-generate-form" class="ai-section" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="form-group">
+            <label class="form-label">主题 / 标题 *</label>
+            <input class="form-input" id="ai-topic" type="text" placeholder="如：人工智能发展趋势">
+          </div>
+          <div class="form-group">
+            <label class="form-label">页数</label>
+            <div class="input-row">
+              <input class="form-input" id="ai-pages" type="number" value="8" min="3" max="20" style="width:80px;flex:none;">
+              <select class="form-select" id="ai-lang">
+                <option value="zh">中文</option>
+                <option value="en">英文</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">风格描述（可选）</label>
+            <input class="form-input" id="ai-style" type="text" placeholder="如：科技感深色、简约白色">
+          </div>
+          <button id="ai-generate-btn">✨ 生成 PPT</button>
+        </div>
+
+        <!-- Modify Form -->
+        <div id="ai-modify-form" class="ai-section" style="display:none;flex-direction:column;gap:10px;">
+          <div class="form-group">
+            <label class="form-label">修改指令</label>
+            <textarea class="form-textarea" id="ai-modify-instruction"
+              placeholder="如：把标题改大，换成蓝色配色，添加数据可视化图表..."
+              rows="4"></textarea>
+          </div>
+          <button id="ai-modify-btn">🔧 应用 AI 修改</button>
+        </div>
+
+        <!-- Shared stop button + progress -->
+        <button id="ai-stop-btn">⏹ 停止生成</button>
+        <div id="ai-progress"></div>
+
+      </div>
+    </div><!-- /ai-panel -->
+
+  </div><!-- /workspace -->
+
+  <!-- ── Editor Drawer ────────────────────────────────────────────────── -->
+  <div id="editor-drawer">
+    <div id="editor-resize-handle"></div>
+    <div id="editor-toolbar">
+      <span>源码编辑 — <span id="editor-slide-label">幻灯片 1</span></span>
+      <button class="editor-action-btn apply" id="editor-apply-btn">应用 ↵</button>
+    </div>
+    <div id="editor-container"></div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ── Export Modal ─────────────────────────────────────────────────────── -->
+<div class="modal-backdrop hidden" id="export-modal">
+  <div class="modal">
+    <div class="modal-header">
+      导出幻灯片
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">导出格式</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="export-format" value="pptx" checked> PPTX</label>
+          <label class="radio-label"><input type="radio" name="export-format" value="pdf"> PDF</label>
+          <label class="radio-label"><input type="radio" name="export-format" value="png"> PNG</label>
+          <label class="radio-label"><input type="radio" name="export-format" value="jpeg"> JPEG</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">导出范围 <span id="export-total-hint" style="color:var(--text-muted);font-size:11px;"></span></label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="export-range" value="all" checked> 全部</label>
+          <label class="radio-label"><input type="radio" name="export-range" value="current"> 当前页</label>
+          <label class="radio-label"><input type="radio" name="export-range" value="custom"> 自定义</label>
+        </div>
+        <input class="form-input" id="export-range-input" type="text" placeholder='如 "1-3, 5, 7"' style="margin-top:6px;display:none;">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">分辨率倍率</label>
+        <div class="radio-group">
+          <label class="radio-label"><input type="radio" name="export-scale" value="1"> 1×</label>
+          <label class="radio-label"><input type="radio" name="export-scale" value="1.5" checked> 1.5×</label>
+          <label class="radio-label"><input type="radio" name="export-scale" value="2"> 2×</label>
+        </div>
+      </div>
+
+      <!-- Progress (hidden until export starts) -->
+      <div id="export-progress-section" style="display:none;">
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="export-progress-bar"></div>
+        </div>
+        <div class="progress-text" id="export-progress-text">准备中...</div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="export-cancel-btn">取消</button>
+      <button class="btn-primary" id="export-confirm-btn">开始导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Settings Modal ───────────────────────────────────────────────────── -->
+<div class="modal-backdrop hidden" id="settings-modal">
+  <div class="modal" id="settings-inner">
+    <div class="modal-header">
+      AI 设置
+      <button class="modal-close" id="settings-close-btn">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label">API Base URL</label>
+        <input class="form-input" id="settings-base-url" type="text" placeholder="https://api.openai.com/v1">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <div class="input-row">
+          <input class="form-input" id="settings-api-key" type="password" placeholder="sk-...">
+          <button class="btn-secondary" id="toggle-api-key" style="white-space:nowrap;padding:0 10px;">显示</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">模型名称</label>
+        <input class="form-input" id="settings-model" type="text" placeholder="gpt-4o">
+      </div>
+
+      <p style="font-size:11px;color:var(--text-muted);line-height:1.6;">
+        API Key 保存在本地 userData 目录，不会上传到任何服务器。<br>
+        支持 OpenAI 兼容接口（如 DeepSeek、本地 Ollama 等）。
+      </p>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="settings-close-btn2" onclick="document.getElementById('settings-modal').classList.add('hidden')">取消</button>
+      <button class="btn-primary" id="settings-save-btn">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Export modal range input visibility ──
+document.querySelectorAll('input[name="export-range"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    const input = document.getElementById('export-range-input')
+    input.style.display = radio.value === 'custom' ? 'block' : 'none'
+  })
+})
+
+// ── AI panel close ──
+document.getElementById('ai-panel-close-btn').addEventListener('click', () => {
+  document.getElementById('ai-panel').classList.add('collapsed')
+  document.getElementById('ai-toggle-btn').classList.remove('active')
+})
+
+// ── Update slide count in sidebar ──
+const origRenderThumbnails = window._patchThumbnails
+const slideCountEl = document.getElementById('slide-count')
+const thumbObserver = new MutationObserver(() => {
+  const count = document.querySelectorAll('.thumb-item').length
+  slideCountEl.textContent = count + ' 页'
+})
+thumbObserver.observe(document.getElementById('thumbnails'), { childList: true })
+</script>
+
+<!-- ── App Entry Point ──────────────────────────────────────────────────── -->
+<script type="module" src="app.js"></script>
+
+</body>
+</html>
