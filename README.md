@@ -1,21 +1,21 @@
-# PPT HTML Editor
+# Slide X
 
-一个强大的 HTML 演示文稿编辑器，支持 AI 生成、编辑和导出精美的 PPT 文档。
+一个强大的 HTML 演示文稿编辑器，支持 AI 生成、交互组件和多格式导出。
 
 ## ✨ 主要功能
 
-- 🤖 **AI 生成**：内置 AI 助手，输入主题即可生成完整 PPT
+- 🤖 **Slide AI**：内置 AI 助手，输入主题即可生成完整 PPT
 - 📎 **附件上传**：上传文档（PDF/DOCX/TXT/MD）作为 AI 背景知识
 - 🎨 **风格模板**：11 种预设配色方案，胶囊按钮 + 悬停预览卡片
 - 🖼️ **图片提取风格**：上传 PPT 截图，AI 自动提取配色和布局风格
 - ✏️ **智能修改**：AI 自动识别意图，支持单页智能修改
+- 🎯 **A2UI 交互组件**：支持按钮、卡片、标签页等交互组件
 - 🖼️ **可视化编辑**：双击元素直接编辑，所见即所得
 - 📝 **源码编辑**：CodeMirror 代码编辑器，支持语法高亮
 - 🔄 **撤销重做**：完整的历史记录，每个幻灯片独立管理
 - 🎬 **全屏演示**：专业的演示模式，支持快捷键导航
 - 📦 **多格式导出**：PPTX（图片/可编辑）、PDF、PNG、JPEG
 - 📐 **智能字号**：CJK 字符宽度自适应，导出时自动防溢出
-- ⚠️ **导出警告**：导出完成后显示详细的问题提示
 
 ## 🚀 快速开始
 
@@ -39,12 +39,11 @@ npm start
 2. 点击「✨ AI 生成」按钮
 3. 输入主题，点击「生成 PPT」
 
-
 ### 基本工作流程
 
 1. **配置 API Key** → 2. **输入主题生成** → 3. **AI 修改微调** → 4. **导出 PPT**
 
-## 🤖 AI 功能详解
+## 🤖 Slide AI 功能详解
 
 ### 生成 PPT（两步流程）
 
@@ -57,7 +56,7 @@ npm start
 **第二步：确认并生成**
 1. 预览生成的大纲，可直接编辑
 2. 满意后点击「✨ 确认并生成 PPT」
-3. AI 将根据大纲生成完整的 HTML PPT
+3. Slide AI 将根据大纲生成完整的 HTML PPT
 
 ### 附件上传
 
@@ -88,12 +87,27 @@ npm start
 2. 输入修改指令（如"把标题改大"、"换成蓝色配色"）
 3. AI 会保持整体风格一致性进行修改
 
+## 🎯 A2UI 交互组件
+
+Slide X 支持在幻灯片中嵌入 A2UI 交互组件，让演示更加生动：
+
+- **按钮**：`<a2ui-button label="点击我" variant="primary"></a2ui-button>`
+- **卡片**：`<a2ui-card title="标题">内容</a2ui-card>`
+- **标签页**：`<a2ui-tabs>` + `<a2ui-tab>`
+- **滑块**：`<a2ui-slider min="0" max="100"></a2ui-slider>`
+
+**编辑/预览模式切换：**
+- 编辑模式：双击文本直接修改
+- 预览模式：A2UI 组件完全可交互
+
+导出时，A2UI 组件会自动转换为静态样式，确保 PPTX/PDF 兼容性。
+
 ## 📖 编辑指南
 
 **可视化编辑：**
 - 双击任意文本元素直接编辑
 - Enter 键确认，Escape 键取消
-- 修改会自动同步到源码
+- 修改会自��同步到源码
 
 **源码编辑：**
 - 点击"源码"按钮打开代码编辑器
@@ -147,8 +161,48 @@ npm install
 # 启动开发
 npm start
 
-# 打包
-npm run dist
+# 打包 macOS
+npm run build:mac
+
+# 打包 Windows
+npm run build:win
+
+# 打包所有平台
+npm run build:all
 ```
 
+## 🙏 致谢
+
+Slide X 的开发离不开以下优秀的开源项目：
+
+### 核心框架
+- [Electron](https://www.electronjs.org/) - 跨平台桌面应用框架
+- [electron-builder](https://www.electron.build/) - Electron 应用打包工具
+
+### 编辑器
+- [CodeMirror 6](https://codemirror.net/) - 强大的代码编辑器组件
+
+### 导出功能
+- [html2canvas](https://html2canvas.hertzen.com/) - HTML 转 Canvas 截图
+- [jsPDF](https://github.com/parallax/jsPDF) - JavaScript PDF 生成库
+- [PptxGenJS](https://gitbrent.github.io/PptxGenJS/) - JavaScript PowerPoint 生成库
+- [JSZip](https://stuk.github.io/jszip/) - JavaScript ZIP 压缩库
+
+### 文档解析
+- [Mammoth](https://github.com/mwilliamson/mammoth.js) - DOCX 文档解析
+- [pdf-parse](https://www.npmjs.com/package/pdf-parse) - PDF 文档解析
+
+### UI 组件
+- [A2UI](https://github.com/nicepkg/a2ui) - Agent-to-UI 声明式交互组件库
+
+### AI 服务
+- [OpenAI API](https://platform.openai.com/) - GPT 系列模型 API
+- 兼容 DeepSeek、Ollama 等 OpenAI 格式接口
+
+---
+
 **享受创作！** 🎨✨
+
+## 📄 License
+
+MIT License
