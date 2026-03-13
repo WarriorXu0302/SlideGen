@@ -54,7 +54,7 @@ export async function initApp() {
 
   initExporter()
 
-  initAIPanel({
+  await initAIPanel({
     onGenerate: (html) => loadHTMLContent(html, null),
     onModify: (html) => replaceCurrentSlide(html),
     getAppState: () => state

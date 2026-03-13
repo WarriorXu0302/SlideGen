@@ -28,6 +28,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openPresentation: (htmlContent, startIndex) =>
     ipcRenderer.invoke('open-presentation', htmlContent, startIndex),
 
+  // Memory files
+  showMemoryFileDialog: () => ipcRenderer.invoke('show-memory-file-dialog'),
+  parseMemoryFile: (filePath) => ipcRenderer.invoke('parse-memory-file', filePath),
+  getMemoryList: () => ipcRenderer.invoke('get-memory-list'),
+  saveMemoryFile: (fileEntry) => ipcRenderer.invoke('save-memory-file', fileEntry),
+  deleteMemoryFile: (fileId) => ipcRenderer.invoke('delete-memory-file', fileId),
+  updateMemoryTags: (fileId, tags) => ipcRenderer.invoke('update-memory-tags', fileId, tags),
+
   // Menu event listeners
   onMenuEvent: (channel, callback) => {
     const validChannels = [

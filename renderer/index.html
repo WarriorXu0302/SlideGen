@@ -148,53 +148,8 @@
         <span>✨ AI 助手</span>
         <button class="toolbar-btn" id="ai-panel-close-btn" style="height:24px;padding:0 6px;" title="关闭">✕</button>
       </div>
-      <div id="ai-panel-body">
-
-        <!-- Tabs -->
-        <div class="ai-tabs">
-          <button class="ai-tab active" id="ai-tab-generate">全新生成</button>
-          <button class="ai-tab" id="ai-tab-modify">修改当前页</button>
-        </div>
-
-        <!-- Generate Form -->
-        <div id="ai-generate-form" class="ai-section" style="display:flex;flex-direction:column;gap:10px;">
-          <div class="form-group">
-            <label class="form-label">主题 / 标题 *</label>
-            <input class="form-input" id="ai-topic" type="text" placeholder="如：人工智能发展趋势">
-          </div>
-          <div class="form-group">
-            <label class="form-label">页数</label>
-            <div class="input-row">
-              <input class="form-input" id="ai-pages" type="number" value="8" min="3" max="20" style="width:80px;flex:none;">
-              <select class="form-select" id="ai-lang">
-                <option value="zh">中文</option>
-                <option value="en">英文</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">风格描述（可选）</label>
-            <input class="form-input" id="ai-style" type="text" placeholder="如：科技感深色、简约白色">
-          </div>
-          <button id="ai-generate-btn">✨ 生成 PPT</button>
-        </div>
-
-        <!-- Modify Form -->
-        <div id="ai-modify-form" class="ai-section" style="display:none;flex-direction:column;gap:10px;">
-          <div class="form-group">
-            <label class="form-label">修改指令</label>
-            <textarea class="form-textarea" id="ai-modify-instruction"
-              placeholder="如：把标题改大，换成蓝色配色，添加数据可视化图表..."
-              rows="4"></textarea>
-          </div>
-          <button id="ai-modify-btn">🔧 应用 AI 修改</button>
-        </div>
-
-        <!-- Shared stop button + progress -->
-        <button id="ai-stop-btn">⏹ 停止生成</button>
-        <div id="ai-progress"></div>
-
-      </div>
+      <!-- Content is rendered by ai-panel.js renderAIPanel() -->
+      <div id="ai-panel-body"></div>
     </div><!-- /ai-panel -->
 
   </div><!-- /workspace -->
@@ -224,9 +179,13 @@
         <label class="form-label">导出格式</label>
         <div class="radio-group">
           <label class="radio-label"><input type="radio" name="export-format" value="pptx" checked> PPTX</label>
+          <label class="radio-label"><input type="radio" name="export-format" value="editable-pptx"> 可编辑 PPTX</label>
           <label class="radio-label"><input type="radio" name="export-format" value="pdf"> PDF</label>
           <label class="radio-label"><input type="radio" name="export-format" value="png"> PNG</label>
           <label class="radio-label"><input type="radio" name="export-format" value="jpeg"> JPEG</label>
+        </div>
+        <div id="editable-pptx-hint" style="display:none;margin-top:6px;font-size:11px;color:var(--text-muted);line-height:1.5;">
+          文字可在 PowerPoint 中直接编辑。背景色保留，复杂装饰元素（渐变、图标）不导出。
         </div>
       </div>
 
@@ -311,6 +270,14 @@ document.querySelectorAll('input[name="export-range"]').forEach(radio => {
   radio.addEventListener('change', () => {
     const input = document.getElementById('export-range-input')
     input.style.display = radio.value === 'custom' ? 'block' : 'none'
+  })
+})
+
+// ── Export format hint visibility ──
+document.querySelectorAll('input[name="export-format"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    const hint = document.getElementById('editable-pptx-hint')
+    if (hint) hint.style.display = radio.value === 'editable-pptx' ? 'block' : 'none'
   })
 })
 

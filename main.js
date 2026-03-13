@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const os = require('os')
+const { randomUUID } = require('crypto')
 
 let mainWindow
 let isDirtyFlag = false
@@ -18,9 +19,14 @@ function loadConfig() {
       recentFiles: [],
       apiKey: '',
       baseUrl: 'https://api.openai.com/v1',
-      model: 'gpt-4o'
+      model: 'gpt-4o',
+      memoryFiles: [],
+      styleConfig: null
     }
   }
+  // Ensure new fields exist on old configs
+  if (!config.memoryFiles) config.memoryFiles = []
+  if (config.styleConfig === undefined) config.styleConfig = null
 }
 
 function saveConfig() {
@@ -259,7 +265,110 @@ ipcMain.on('set-dirty-flag', (event, dirty) => {
   isDirtyFlag = dirty
 })
 
-ipcMain.handle('open-presentation', async (event, htmlContent) => {
+// ──── Memory File Handlers ────
+
+ipcMain.handle('show-memory-file-dialog', async () => {
+  return dialog.showOpenDialog(mainWindow, {
+    filters: [
+      { name: 'Supported Files', extensions: ['txt', 'md', 'json', 'csv', 'docx', 'pdf'] },
+      { name: 'Text Files', extensions: ['txt', 'md'] },
+      { name: 'Office Files', extensions: ['docx'] },
+      { name: 'PDF Files', extensions: ['pdf'] },
+      { name: 'Data Files', extensions: ['json', 'csv'] }
+    ],
+    properties: ['openFile', 'multiSelections']
+  })
+})
+
+ipcMain.handle('parse-memory-file', async (_event, filePath) => {
+  const ext = path.extname(filePath).toLowerCase().slice(1)
+  const name = path.basename(filePath)
+
+  try {
+    let content = ''
+
+    if (ext === 'txt' || ext === 'md') {
+      content = fs.readFileSync(filePath, 'utf8')
+    } else if (ext === 'json') {
+      const raw = fs.readFileSync(filePath, 'utf8')
+      const obj = JSON.parse(raw)
+      content = JSON.stringify(obj, null, 2)
+    } else if (ext === 'csv') {
+      content = fs.readFileSync(filePath, 'utf8')
+    } else if (ext === 'docx') {
+      try {
+        const mammoth = require('mammoth')
+        const result = await mammoth.extractRawText({ path: filePath })
+        content = result.value
+      } catch (e) {
+        throw new Error('解析 DOCX 失败: ' + e.message)
+      }
+    } else if (ext === 'pdf') {
+      try {
+        const pdfParse = require('pdf-parse')
+        const buffer = fs.readFileSync(filePath)
+        const data = await pdfParse(buffer)
+        content = data.text
+      } catch (e) {
+        throw new Error('解析 PDF 失败: ' + e.message)
+      }
+    } else {
+      throw new Error('不支持的文件格式: ' + ext)
+    }
+
+    // Truncate very large files to avoid exceeding token limits
+    const MAX_CHARS = 50000
+    if (content.length > MAX_CHARS) {
+      content = content.slice(0, MAX_CHARS) + '\n\n[内容已截断，显示前 50000 字符]'
+    }
+
+    return {
+      id: randomUUID(),
+      name,
+      type: ext,
+      content: content.trim(),
+      size: Buffer.byteLength(content, 'utf8'),
+      uploadTime: new Date().toISOString()
+    }
+  } catch (e) {
+    throw e
+  }
+})
+
+ipcMain.handle('get-memory-list', () => {
+  return config.memoryFiles || []
+})
+
+ipcMain.handle('save-memory-file', async (_event, fileEntry) => {
+  if (!config.memoryFiles) config.memoryFiles = []
+  const existing = config.memoryFiles.findIndex(f => f.id === fileEntry.id)
+  if (existing >= 0) {
+    config.memoryFiles[existing] = fileEntry
+  } else {
+    config.memoryFiles.push(fileEntry)
+  }
+  saveConfig()
+  return true
+})
+
+ipcMain.handle('delete-memory-file', async (_event, fileId) => {
+  if (!config.memoryFiles) return true
+  config.memoryFiles = config.memoryFiles.filter(f => f.id !== fileId)
+  saveConfig()
+  return true
+})
+
+ipcMain.handle('update-memory-tags', async (_event, fileId, tags) => {
+  if (!config.memoryFiles) return false
+  const file = config.memoryFiles.find(f => f.id === fileId)
+  if (file) {
+    file.tags = tags
+    saveConfig()
+  }
+  return true
+})
+
+ipcMain.handle('open-presentation', async (_event, htmlContent) => {
   // htmlContent is already a fully self-contained presentation HTML
   // built by app.js — no injection needed here
   const tmpFile = path.join(os.tmpdir(), `ppt-pres-${Date.now()}.html`)

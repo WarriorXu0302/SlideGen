@@ -617,6 +617,203 @@ body.mac #toolbar { padding-left: 80px; }
 /* ── Scrollbars ────────────────────────────────────────────────────────── */
 * { scrollbar-width: thin; scrollbar-color: var(--bg-hover) transparent; }
 
+/* ── Intent Hint ───────────────────────────────────────────────────────── */
+.intent-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0;
+  height: 0;
+  overflow: hidden;
+  transition: all 0.2s;
+  border-radius: var(--radius);
+}
+.intent-hint.visible {
+  padding: 6px 8px;
+  height: auto;
+  background: rgba(100, 160, 255, 0.08);
+  border: 1px solid rgba(100, 160, 255, 0.2);
+  color: #7ab4ff;
+}
+
+/* ── Memory Badge ──────────────────────────────────────────────────────── */
+.memory-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  vertical-align: middle;
+  margin-left: 3px;
+}
+
+/* ── Memory Drop Zone ──────────────────────────────────────────────────── */
+.memory-drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 20px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.memory-drop-zone:hover,
+.memory-drop-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.memory-drop-icon { font-size: 28px; opacity: 0.5; }
+.memory-drop-text { font-size: 12px; color: var(--text-secondary); }
+.memory-drop-hint { font-size: 11px; color: var(--text-muted); }
+
+/* ── Memory List ───────────────────────────────────────────────────────── */
+.memory-empty {
+  text-align: center;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+
+.memory-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  margin-bottom: 6px;
+  transition: all 0.15s;
+}
+.memory-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.memory-item-icon { font-size: 18px; flex-shrink: 0; }
+.memory-item-info { flex: 1; min-width: 0; }
+.memory-item-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.memory-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.memory-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+.memory-toggle-btn {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font);
+}
+.memory-toggle-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.memory-toggle-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+.memory-delete-btn {
+  width: 22px; height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.memory-delete-btn:hover { background: rgba(255, 60, 60, 0.15); color: #ff6b6b; }
+
+.memory-tip {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 6px 0;
+}
+
+/* ── Style Panel ───────────────────────────────────────────────────────── */
+.style-slider {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.style-preview, #style-preview {
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 80px;
+}
+
+.style-preview-empty {
+  text-align: center;
+  padding: 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.style-preview-card {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+}
+
+.style-preview-title {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.style-preview-subtitle {
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.style-preview-body {
+  font-size: 11px;
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+
+.style-preview-accent {
+  height: 3px;
+  border-radius: 2px;
+  margin-bottom: 6px;
+  width: 40%;
+}
+
+.style-preview-hint {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.style-params-display {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px 0;
+}
+
 /* ── Drag target highlight ─────────────────────────────────────────────── */
 body.drag-over #preview-container::after {
   content: 'Drop HTML file here';
