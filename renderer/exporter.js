@@ -892,7 +892,7 @@ function showExportWarnings(warnings) {
           文件已导出，但有以下提示：
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;">
-          ${summary.map(s => `<div style="font-size:13px;">${s}</div>`).join('')}
+          ${summary.map(s => `<div style="font-size:13px;">${escapeHtmlForExport(s)}</div>`).join('')}
         </div>
         ${details}
       </div>
