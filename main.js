@@ -1,19 +1,61 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, dialog, safeStorage, protocol } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const fsPromises = require('fs').promises
 const os = require('os')
 const { randomUUID } = require('crypto')
+
+// ──── Constants ────
+const MAX_MEMORY_FILE_CHARS = 50000
+const MAX_RECENT_FILES = 10
+const ALLOWED_HTML_EXTENSIONS = ['.html', '.htm']
 
 let mainWindow
 let isDirtyFlag = false
 let config = {}
+let pendingSaveResolve = null
 
 const CONFIG_PATH = () => path.join(app.getPath('userData'), 'config.json')
 
-function loadConfig() {
+// ──── Safe Storage Helpers ────
+function encryptApiKey(apiKey) {
+  if (!apiKey || !safeStorage.isEncryptionAvailable()) {
+    return apiKey
+  }
   try {
-    const data = fs.readFileSync(CONFIG_PATH(), 'utf8')
+    return safeStorage.encryptString(apiKey).toString('base64')
+  } catch (e) {
+    console.error('Failed to encrypt API key:', e)
+    return apiKey
+  }
+}
+
+function decryptApiKey(encryptedKey) {
+  if (!encryptedKey || !safeStorage.isEncryptionAvailable()) {
+    return encryptedKey
+  }
+  try {
+    // Check if it looks like base64 encrypted data
+    if (encryptedKey.length > 100 && !encryptedKey.startsWith('sk-')) {
+      const buffer = Buffer.from(encryptedKey, 'base64')
+      return safeStorage.decryptString(buffer)
+    }
+    return encryptedKey
+  } catch (e) {
+    // Return as-is if decryption fails (might be plaintext from old version)
+    return encryptedKey
+  }
+}
+
+// ──── Config Management ────
+async function loadConfig() {
+  try {
+    const data = await fsPromises.readFile(CONFIG_PATH(), 'utf8')
     config = JSON.parse(data)
+    // Decrypt API key on load
+    if (config.apiKey) {
+      config.apiKey = decryptApiKey(config.apiKey)
+    }
   } catch (e) {
     config = {
       recentFiles: [],
@@ -29,10 +71,15 @@ function loadConfig() {
   if (config.styleConfig === undefined) config.styleConfig = null
 }
 
-function saveConfig() {
+async function saveConfig() {
   try {
-    fs.mkdirSync(path.dirname(CONFIG_PATH()), { recursive: true })
-    fs.writeFileSync(CONFIG_PATH(), JSON.stringify(config, null, 2), 'utf8')
+    await fsPromises.mkdir(path.dirname(CONFIG_PATH()), { recursive: true })
+    // Create a copy with encrypted API key
+    const configToSave = { ...config }
+    if (configToSave.apiKey) {
+      configToSave.apiKey = encryptApiKey(configToSave.apiKey)
+    }
+    await fsPromises.writeFile(CONFIG_PATH(), JSON.stringify(configToSave, null, 2), 'utf8')
   } catch (e) {
     console.error('Failed to save config:', e)
   }
@@ -42,11 +89,53 @@ function addRecentFile(filePath) {
   if (!config.recentFiles) config.recentFiles = []
   config.recentFiles = config.recentFiles.filter(f => f !== filePath)
   config.recentFiles.unshift(filePath)
-  config.recentFiles = config.recentFiles.slice(0, 10)
+  config.recentFiles = config.recentFiles.slice(0, MAX_RECENT_FILES)
   saveConfig()
   buildMenu()
 }
 
+// ──── Path Validation ────
+function isValidFilePath(filePath, allowedExtensions = null) {
+  if (!filePath || typeof filePath !== 'string') {
+    return false
+  }
+
+  // Normalize and resolve the path
+  const normalizedPath = path.normalize(filePath)
+  const resolvedPath = path.resolve(filePath)
+
+  // Check for path traversal attempts
+  if (normalizedPath.includes('..') && resolvedPath !== normalizedPath) {
+    return false
+  }
+
+  // Check extension if specified
+  if (allowedExtensions) {
+    const ext = path.extname(filePath).toLowerCase()
+    if (!allowedExtensions.includes(ext)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isAllowedReadPath(filePath) {
+  // Allow reading from common safe locations
+  const allowedRoots = [
+    app.getPath('home'),
+    app.getPath('documents'),
+    app.getPath('downloads'),
+    app.getPath('desktop'),
+    app.getPath('userData'),
+    os.tmpdir()
+  ]
+
+  const resolvedPath = path.resolve(filePath)
+  return allowedRoots.some(root => resolvedPath.startsWith(root))
+}
+
+// ──── Menu Building ────
 function buildRecentFilesMenu() {
   const recent = config.recentFiles || []
   if (recent.length === 0) {
@@ -165,6 +254,7 @@ function buildMenu() {
   Menu.setApplicationMenu(menu)
 }
 
+// ──── Window Creation ────
 function createWindow() {
   const isMac = process.platform === 'darwin'
 
@@ -179,7 +269,9 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false  // Allow loading local resources and CDN from file:// context
+      // Note: webSecurity is disabled to allow loading CDN resources from file:// context
+      // In production, consider using a custom protocol or local bundling
+      webSecurity: false
     }
   })
 
@@ -197,8 +289,20 @@ function createWindow() {
         message: '文件已修改，是否保存？'
       })
       if (choice.response === 0) {
+        // Request save and wait for confirmation
+        const savePromise = new Promise(resolve => {
+          pendingSaveResolve = resolve
+          // Fallback timeout in case save-complete is never received
+          setTimeout(() => {
+            if (pendingSaveResolve) {
+              pendingSaveResolve()
+              pendingSaveResolve = null
+            }
+          }, 5000)
+        })
         mainWindow.webContents.send('menu-save')
-        setTimeout(() => mainWindow.destroy(), 500)
+        await savePromise
+        mainWindow.destroy()
       } else if (choice.response === 1) {
         mainWindow.destroy()
       }
@@ -210,12 +314,21 @@ function createWindow() {
 // ──── IPC Handlers ────
 
 ipcMain.handle('read-file', async (event, filePath) => {
-  return fs.readFileSync(filePath, 'utf8')
+  if (!isValidFilePath(filePath, ALLOWED_HTML_EXTENSIONS)) {
+    throw new Error('Invalid file path or extension')
+  }
+  if (!isAllowedReadPath(filePath)) {
+    throw new Error('Access to this path is not allowed')
+  }
+  return fsPromises.readFile(filePath, 'utf8')
 })
 
 ipcMain.handle('write-file', async (event, filePath, content) => {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  fs.writeFileSync(filePath, content, 'utf8')
+  if (!isValidFilePath(filePath, ALLOWED_HTML_EXTENSIONS)) {
+    throw new Error('Invalid file path or extension')
+  }
+  await fsPromises.mkdir(path.dirname(filePath), { recursive: true })
+  await fsPromises.writeFile(filePath, content, 'utf8')
   addRecentFile(filePath)
   return true
 })
@@ -265,12 +378,22 @@ ipcMain.on('set-dirty-flag', (event, dirty) => {
   isDirtyFlag = dirty
 })
 
+// Save completion notification for window close handling
+ipcMain.on('save-complete', () => {
+  if (pendingSaveResolve) {
+    pendingSaveResolve()
+    pendingSaveResolve = null
+  }
+})
+
 // ──── Memory File Handlers ────
+
+const ALLOWED_MEMORY_EXTENSIONS = ['txt', 'md', 'json', 'csv', 'docx', 'pdf']
 
 ipcMain.handle('show-memory-file-dialog', async () => {
   return dialog.showOpenDialog(mainWindow, {
     filters: [
-      { name: 'Supported Files', extensions: ['txt', 'md', 'json', 'csv', 'docx', 'pdf'] },
+      { name: 'Supported Files', extensions: ALLOWED_MEMORY_EXTENSIONS },
       { name: 'Text Files', extensions: ['txt', 'md'] },
       { name: 'Office Files', extensions: ['docx'] },
       { name: 'PDF Files', extensions: ['pdf'] },
@@ -284,17 +407,27 @@ ipcMain.handle('parse-memory-file', async (_event, filePath) => {
   const ext = path.extname(filePath).toLowerCase().slice(1)
   const name = path.basename(filePath)
 
+  // Validate extension
+  if (!ALLOWED_MEMORY_EXTENSIONS.includes(ext)) {
+    throw new Error('不支持的文件格式: ' + ext)
+  }
+
+  // Validate path
+  if (!isAllowedReadPath(filePath)) {
+    throw new Error('Access to this path is not allowed')
+  }
+
   try {
     let content = ''
 
     if (ext === 'txt' || ext === 'md') {
-      content = fs.readFileSync(filePath, 'utf8')
+      content = await fsPromises.readFile(filePath, 'utf8')
     } else if (ext === 'json') {
-      const raw = fs.readFileSync(filePath, 'utf8')
+      const raw = await fsPromises.readFile(filePath, 'utf8')
       const obj = JSON.parse(raw)
       content = JSON.stringify(obj, null, 2)
     } else if (ext === 'csv') {
-      content = fs.readFileSync(filePath, 'utf8')
+      content = await fsPromises.readFile(filePath, 'utf8')
     } else if (ext === 'docx') {
       try {
         const mammoth = require('mammoth')
@@ -306,20 +439,17 @@ ipcMain.handle('parse-memory-file', async (_event, filePath) => {
     } else if (ext === 'pdf') {
       try {
         const pdfParse = require('pdf-parse')
-        const buffer = fs.readFileSync(filePath)
+        const buffer = await fsPromises.readFile(filePath)
         const data = await pdfParse(buffer)
         content = data.text
       } catch (e) {
         throw new Error('解析 PDF 失败: ' + e.message)
       }
-    } else {
-      throw new Error('不支持的文件格式: ' + ext)
     }
 
     // Truncate very large files to avoid exceeding token limits
-    const MAX_CHARS = 50000
-    if (content.length > MAX_CHARS) {
-      content = content.slice(0, MAX_CHARS) + '\n\n[内容已截断，显示前 50000 字符]'
+    if (content.length > MAX_MEMORY_FILE_CHARS) {
+      content = content.slice(0, MAX_MEMORY_FILE_CHARS) + `\n\n[内容已截断，显示前 ${MAX_MEMORY_FILE_CHARS} 字符]`
     }
 
     return {
@@ -347,14 +477,14 @@ ipcMain.handle('save-memory-file', async (_event, fileEntry) => {
   } else {
     config.memoryFiles.push(fileEntry)
   }
-  saveConfig()
+  await saveConfig()
   return true
 })
 
 ipcMain.handle('delete-memory-file', async (_event, fileId) => {
   if (!config.memoryFiles) return true
   config.memoryFiles = config.memoryFiles.filter(f => f.id !== fileId)
-  saveConfig()
+  await saveConfig()
   return true
 })
 
@@ -363,7 +493,7 @@ ipcMain.handle('update-memory-tags', async (_event, fileId, tags) => {
   const file = config.memoryFiles.find(f => f.id === fileId)
   if (file) {
     file.tags = tags
-    saveConfig()
+    await saveConfig()
   }
   return true
 })
@@ -372,7 +502,7 @@ ipcMain.handle('open-presentation', async (_event, htmlContent) => {
   // htmlContent is already a fully self-contained presentation HTML
   // built by app.js — no injection needed here
   const tmpFile = path.join(os.tmpdir(), `ppt-pres-${Date.now()}.html`)
-  fs.writeFileSync(tmpFile, htmlContent, 'utf8')
+  await fsPromises.writeFile(tmpFile, htmlContent, 'utf8')
 
   const presWindow = new BrowserWindow({
     width: 1280,
@@ -382,9 +512,9 @@ ipcMain.handle('open-presentation', async (_event, htmlContent) => {
     backgroundColor: '#000',
     alwaysOnTop: false,
     webPreferences: {
-      contextIsolation: false,
+      contextIsolation: true,
       nodeIntegration: false,
-      webSecurity: false
+      sandbox: true
     }
   })
 
@@ -395,8 +525,12 @@ ipcMain.handle('open-presentation', async (_event, htmlContent) => {
     if (input.key === 'Escape') presWindow.close()
   })
 
-  presWindow.on('closed', () => {
-    try { fs.unlinkSync(tmpFile) } catch (_) {}
+  presWindow.on('closed', async () => {
+    try {
+      await fsPromises.unlink(tmpFile)
+    } catch (_) {
+      // Ignore cleanup errors
+    }
   })
 
   return true
@@ -404,8 +538,8 @@ ipcMain.handle('open-presentation', async (_event, htmlContent) => {
 
 // ──── App lifecycle ────
 
-app.whenReady().then(() => {
-  loadConfig()
+app.whenReady().then(async () => {
+  await loadConfig()
   createWindow()
   buildMenu()
 

@@ -886,25 +886,66 @@ function renderMemoryList() {
   const listEl = document.getElementById('memory-list')
   if (!listEl) return
 
+  // 清空列表
+  listEl.innerHTML = ''
+
   if (memoryFiles.length === 0) {
-    listEl.innerHTML = '<div class="memory-empty">暂无附件<br>上传文档作为 AI 的背景知识</div>'
+    const emptyEl = document.createElement('div')
+    emptyEl.className = 'memory-empty'
+    emptyEl.innerHTML = '暂无附件<br>上传文档作为 AI 的背景知识'
+    listEl.appendChild(emptyEl)
     updateMemoryBadge()
     return
   }
 
-  listEl.innerHTML = memoryFiles.map(file => `
-    <div class="memory-item ${file.selected ? 'selected' : ''}" data-id="${file.id}">
-      <div class="memory-item-icon">${getFileIcon(file.type)}</div>
-      <div class="memory-item-info">
-        <div class="memory-item-name">${escapeHtml(file.name)}</div>
-        <div class="memory-item-meta">${file.type.toUpperCase()} · ${formatSize(file.size)} · ${file.content.length} 字符</div>
-      </div>
-      <div class="memory-item-actions">
-        <button class="memory-toggle-btn ${file.selected ? 'active' : ''}" data-action="toggle" title="${file.selected ? '取消使用' : '启用此文件'}">${file.selected ? '✓ 启用' : '启用'}</button>
-        <button class="memory-delete-btn" data-action="delete" title="删除">✕</button>
-      </div>
-    </div>
-  `).join('')
+  // 使用 DOM API 创建列表元素
+  memoryFiles.forEach(file => {
+    const item = document.createElement('div')
+    item.className = `memory-item${file.selected ? ' selected' : ''}`
+    item.dataset.id = file.id
+
+    const icon = document.createElement('div')
+    icon.className = 'memory-item-icon'
+    icon.textContent = getFileIcon(file.type)
+
+    const info = document.createElement('div')
+    info.className = 'memory-item-info'
+
+    const name = document.createElement('div')
+    name.className = 'memory-item-name'
+    name.textContent = file.name  // 使用 textContent 自动转义
+
+    const meta = document.createElement('div')
+    meta.className = 'memory-item-meta'
+    meta.textContent = `${String(file.type).toUpperCase()} · ${formatSize(file.size)} · ${file.content.length} 字符`
+
+    info.appendChild(name)
+    info.appendChild(meta)
+
+    const actions = document.createElement('div')
+    actions.className = 'memory-item-actions'
+
+    const toggleBtn = document.createElement('button')
+    toggleBtn.className = `memory-toggle-btn${file.selected ? ' active' : ''}`
+    toggleBtn.dataset.action = 'toggle'
+    toggleBtn.title = file.selected ? '取消使用' : '启用此文件'
+    toggleBtn.textContent = file.selected ? '✓ 启用' : '启用'
+
+    const deleteBtn = document.createElement('button')
+    deleteBtn.className = 'memory-delete-btn'
+    deleteBtn.dataset.action = 'delete'
+    deleteBtn.title = '删除'
+    deleteBtn.textContent = '✕'
+
+    actions.appendChild(toggleBtn)
+    actions.appendChild(deleteBtn)
+
+    item.appendChild(icon)
+    item.appendChild(info)
+    item.appendChild(actions)
+
+    listEl.appendChild(item)
+  })
 
   updateMemoryBadge()
 }
@@ -1332,6 +1373,11 @@ async function streamCompletion(config, systemPrompt, userPrompt, onChunk, maxTo
   const model = config.model || 'gpt-4o'
   const apiKey = config.apiKey
 
+  // 验证 URL 格式
+  if (!isValidUrl(baseUrl)) {
+    throw new Error('API Base URL 格式无效')
+  }
+
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -1391,6 +1437,18 @@ async function streamCompletion(config, systemPrompt, userPrompt, onChunk, maxTo
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
+/**
+ * 验证 URL 格式
+ */
+function isValidUrl(urlString) {
+  try {
+    const url = new URL(urlString)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch (e) {
+    return false
+  }
+}
+
 async function loadSettingsToForm() {
   const config = await window.electronAPI.getConfig()
   document.getElementById('settings-base-url').value = config.baseUrl || 'https://api.openai.com/v1'
@@ -1402,6 +1460,13 @@ async function saveSettings() {
   const baseUrl = document.getElementById('settings-base-url').value.trim()
   const apiKey = document.getElementById('settings-api-key').value.trim()
   const model = document.getElementById('settings-model').value.trim()
+
+  // 验证 URL 格式
+  if (baseUrl && !isValidUrl(baseUrl)) {
+    alert('API Base URL 格式无效，请输入有效的 HTTP/HTTPS URL')
+    return
+  }
+
   await window.electronAPI.setConfig({ baseUrl, apiKey, model })
   closeSettings()
 }

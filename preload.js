@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+// Track registered listeners to prevent duplicates
+const registeredListeners = new Map()
+
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
 
@@ -24,6 +27,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setDocumentEdited: (edited) => ipcRenderer.send('set-document-edited', edited),
   setDirtyFlag: (dirty) => ipcRenderer.send('set-dirty-flag', dirty),
 
+  // Save completion notification
+  notifySaveComplete: () => ipcRenderer.send('save-complete'),
+
   // Presentation window
   openPresentation: (htmlContent, startIndex) =>
     ipcRenderer.invoke('open-presentation', htmlContent, startIndex),
@@ -36,17 +42,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteMemoryFile: (fileId) => ipcRenderer.invoke('delete-memory-file', fileId),
   updateMemoryTags: (fileId, tags) => ipcRenderer.invoke('update-memory-tags', fileId, tags),
 
-  // Menu event listeners
+  // Menu event listeners with cleanup support
   onMenuEvent: (channel, callback) => {
     const validChannels = [
       'menu-open', 'menu-save', 'menu-save-as', 'menu-undo',
       'menu-redo', 'menu-open-file', 'menu-new'
     ]
-    if (validChannels.includes(channel)) {
-      ipcRenderer.on(channel, (event, ...args) => callback(...args))
+    if (!validChannels.includes(channel)) {
+      return () => {} // Return no-op cleanup function
+    }
+
+    // Remove existing listener for this channel to prevent duplicates
+    if (registeredListeners.has(channel)) {
+      const oldListener = registeredListeners.get(channel)
+      ipcRenderer.removeListener(channel, oldListener)
+    }
+
+    // Create wrapped listener
+    const wrappedCallback = (event, ...args) => callback(...args)
+    registeredListeners.set(channel, wrappedCallback)
+    ipcRenderer.on(channel, wrappedCallback)
+
+    // Return cleanup function
+    return () => {
+      ipcRenderer.removeListener(channel, wrappedCallback)
+      registeredListeners.delete(channel)
     }
   },
+
   removeMenuListener: (channel) => {
-    ipcRenderer.removeAllListeners(channel)
+    if (registeredListeners.has(channel)) {
+      const listener = registeredListeners.get(channel)
+      ipcRenderer.removeListener(channel, listener)
+      registeredListeners.delete(channel)
+    }
   }
 })

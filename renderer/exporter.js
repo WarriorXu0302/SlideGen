@@ -431,9 +431,17 @@ function mapAlign(cssAlign) {
 
 /**
  * Parse CSS gradient to PptxGenJS gradient format
+ * Input length is limited to prevent ReDoS attacks
  */
 function parseGradient(bgImage) {
   if (!bgImage || bgImage === 'none') return null
+
+  // Limit input length to prevent ReDoS
+  const MAX_GRADIENT_LENGTH = 500
+  if (bgImage.length > MAX_GRADIENT_LENGTH) {
+    console.warn('Gradient string too long, skipping parse')
+    return null
+  }
 
   // Linear gradient: linear-gradient(135deg, #color1, #color2)
   const linearMatch = bgImage.match(/linear-gradient\(\s*([\d.]+)deg\s*,\s*(.+)\s*\)/)

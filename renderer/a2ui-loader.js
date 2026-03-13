@@ -30,6 +30,7 @@ export function hasA2UIComponents(html) {
 
 /**
  * 轻量级 A2UI 组件定义（纯 JavaScript，无外部依赖）
+ * 注意：所有用户输入都经过严格验证，防止 CSS 注入
  */
 const A2UI_COMPONENTS_SCRIPT = `
 <script>
@@ -37,6 +38,37 @@ const A2UI_COMPONENTS_SCRIPT = `
   // 防止重复注册
   if (window.__a2uiRegistered) return;
   window.__a2uiRegistered = true;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 安全工具函数
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // 验证 CSS 尺寸值（只允许数字+单位格式）
+  function sanitizeSize(value, defaultValue) {
+    if (!value) return defaultValue;
+    // 只允许数字开头，后跟可选的单位
+    const match = String(value).match(/^(\\d+(?:\\.\\d+)?)(px|em|rem|%|vh|vw)?$/);
+    if (match) {
+      return match[1] + (match[2] || 'px');
+    }
+    return defaultValue;
+  }
+
+  // 验证数字
+  function sanitizeNumber(value, defaultValue, min, max) {
+    const num = parseFloat(value);
+    if (isNaN(num)) return defaultValue;
+    if (min !== undefined && num < min) return min;
+    if (max !== undefined && num > max) return max;
+    return num;
+  }
+
+  // 转义 HTML 特殊字符
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // A2UI Button
@@ -55,16 +87,17 @@ const A2UI_COMPONENTS_SCRIPT = `
     static get observedAttributes() { return ['label', 'variant', 'disabled']; }
     attributeChangedCallback() { if (this.shadowRoot) this.render(); }
     render() {
-      const label = this.getAttribute('label') || this.textContent || 'Button';
-      const variant = this.getAttribute('variant') || 'primary';
+      const label = escapeHtml(this.getAttribute('label') || this.textContent || 'Button');
+      const variant = this.getAttribute('variant');
       const disabled = this.hasAttribute('disabled');
 
+      // 预定义的安全颜色映射
       const colors = {
         primary: { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', border: 'transparent' },
         secondary: { bg: 'transparent', color: '#667eea', border: '#667eea' },
         default: { bg: 'rgba(255,255,255,0.1)', color: '#fff', border: 'rgba(255,255,255,0.3)' }
       };
-      const c = colors[variant] || colors.default;
+      const c = colors[variant] || colors.primary;
 
       this.shadowRoot.innerHTML = \`
         <style>
@@ -86,9 +119,7 @@ const A2UI_COMPONENTS_SCRIPT = `
             box-shadow: 0 6px 20px rgba(102,126,234,0.4);
             filter: brightness(1.1);
           }
-          button:active {
-            transform: translateY(0);
-          }
+          button:active { transform: translateY(0); }
           button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -116,7 +147,7 @@ const A2UI_COMPONENTS_SCRIPT = `
     static get observedAttributes() { return ['title']; }
     attributeChangedCallback() { if (this.shadowRoot) this.render(); }
     render() {
-      const title = this.getAttribute('title') || '';
+      const title = escapeHtml(this.getAttribute('title') || '');
       this.shadowRoot.innerHTML = \`
         <style>
           :host {
@@ -165,11 +196,15 @@ const A2UI_COMPONENTS_SCRIPT = `
     }
     connectedCallback() { this.render(); }
     render() {
-      const gap = this.getAttribute('gap') || '16px';
+      const gap = sanitizeSize(this.getAttribute('gap'), '16px');
       const align = this.getAttribute('alignment') || 'stretch';
       const dist = this.getAttribute('distribution') || 'start';
+
+      // 安全的对齐方式映射
       const alignMap = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch' };
       const distMap = { start: 'flex-start', center: 'center', end: 'flex-end', spaceBetween: 'space-between', spaceAround: 'space-around' };
+      const safeAlign = alignMap[align] || 'stretch';
+      const safeDist = distMap[dist] || 'flex-start';
 
       this.shadowRoot.innerHTML = \`
         <style>
@@ -177,8 +212,8 @@ const A2UI_COMPONENTS_SCRIPT = `
             display: flex;
             flex-direction: row;
             gap: \${gap};
-            align-items: \${alignMap[align] || align};
-            justify-content: \${distMap[dist] || dist};
+            align-items: \${safeAlign};
+            justify-content: \${safeDist};
           }
         </style>
         <slot></slot>
@@ -199,8 +234,12 @@ const A2UI_COMPONENTS_SCRIPT = `
     }
     connectedCallback() { this.render(); }
     render() {
-      const gap = this.getAttribute('gap') || '16px';
+      const gap = sanitizeSize(this.getAttribute('gap'), '16px');
       const align = this.getAttribute('alignment') || 'stretch';
+
+      // 安全的对齐方式映射
+      const alignMap = { start: 'flex-start', center: 'center', end: 'flex-end', stretch: 'stretch' };
+      const safeAlign = alignMap[align] || 'stretch';
 
       this.shadowRoot.innerHTML = \`
         <style>
@@ -208,7 +247,7 @@ const A2UI_COMPONENTS_SCRIPT = `
             display: flex;
             flex-direction: column;
             gap: \${gap};
-            align-items: \${align === 'center' ? 'center' : align === 'end' ? 'flex-end' : 'stretch'};
+            align-items: \${safeAlign};
           }
         </style>
         <slot></slot>
@@ -242,10 +281,10 @@ const A2UI_COMPONENTS_SCRIPT = `
     }
 
     render() {
-      const value = parseFloat(this.getAttribute('value')) || 50;
-      const min = parseFloat(this.getAttribute('minValue')) || 0;
-      const max = parseFloat(this.getAttribute('maxValue')) || 100;
-      const percent = ((value - min) / (max - min)) * 100;
+      const min = sanitizeNumber(this.getAttribute('minValue'), 0, -1000000, 1000000);
+      const max = sanitizeNumber(this.getAttribute('maxValue'), 100, -1000000, 1000000);
+      const value = sanitizeNumber(this.getAttribute('value'), 50, min, max);
+      const percent = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
 
       this.shadowRoot.innerHTML = \`
         <style>
@@ -311,7 +350,7 @@ const A2UI_COMPONENTS_SCRIPT = `
       if (tabs.length === 0) return;
 
       const headers = tabs.map((tab, i) => {
-        const title = tab.getAttribute('title') || 'Tab ' + (i + 1);
+        const title = escapeHtml(tab.getAttribute('title') || 'Tab ' + (i + 1));
         const active = i === this._activeIndex ? 'active' : '';
         return '<button class="tab-btn ' + active + '" data-index="' + i + '">' + title + '</button>';
       }).join('');
@@ -347,9 +386,7 @@ const A2UI_COMPONENTS_SCRIPT = `
             background: rgba(102,126,234,0.3);
             color: #fff;
           }
-          .tabs-content {
-            color: #fff;
-          }
+          .tabs-content { color: #fff; }
         </style>
         <div class="tabs-header">\${headers}</div>
         <div class="tabs-content"><slot></slot></div>
@@ -377,9 +414,7 @@ const A2UI_COMPONENTS_SCRIPT = `
   // A2UI Tab (child of Tabs)
   // ═══════════════════════════════════════════════════════════════════════════
   class A2UITab extends HTMLElement {
-    constructor() {
-      super();
-    }
+    constructor() { super(); }
     connectedCallback() {
       this.style.display = 'none'; // Hidden by default, parent controls visibility
     }
@@ -388,7 +423,7 @@ const A2UI_COMPONENTS_SCRIPT = `
     customElements.define('a2ui-tab', A2UITab);
   }
 
-  // ══════════════════════════════════════��════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
   // A2UI Text
   // ═══════════════════════════════════════════════════════════════════════════
   class A2UIText extends HTMLElement {
@@ -400,9 +435,10 @@ const A2UI_COMPONENTS_SCRIPT = `
     static get observedAttributes() { return ['text', 'usageHint']; }
     attributeChangedCallback() { if (this.shadowRoot) this.render(); }
     render() {
-      const text = this.getAttribute('text') || this.textContent || '';
+      const text = escapeHtml(this.getAttribute('text') || this.textContent || '');
       const hint = this.getAttribute('usageHint') || 'body';
 
+      // 预定义的安全样式映射
       const styles = {
         headline: 'font-size: 48px; font-weight: 800; color: #fff;',
         title: 'font-size: 32px; font-weight: 700; color: #fff;',
@@ -411,10 +447,11 @@ const A2UI_COMPONENTS_SCRIPT = `
         caption: 'font-size: 12px; color: rgba(255,255,255,0.5);',
         label: 'font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.7); text-transform: uppercase; letter-spacing: 1px;'
       };
+      const safeStyle = styles[hint] || styles.body;
 
       this.shadowRoot.innerHTML = \`
         <style>
-          :host { display: block; \${styles[hint] || styles.body} }
+          :host { display: block; \${safeStyle} }
         </style>
         \${text}
       \`;

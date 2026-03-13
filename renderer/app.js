@@ -299,6 +299,8 @@ async function saveFile() {
   try {
     await window.electronAPI.writeFile(state.filePath, html)
     setDirty(false)
+    // Notify main process that save is complete
+    window.electronAPI.notifySaveComplete()
   } catch (err) {
     // Permission denied → fall back to Save As (e.g. opened from a read-only path)
     if (err.message.includes('EACCES') || err.message.includes('EPERM') ||
@@ -322,6 +324,8 @@ async function saveFileAs() {
     state.filePath = result.filePath
     setDirty(false)
     updateTitle()
+    // Notify main process that save is complete
+    window.electronAPI.notifySaveComplete()
   } catch (err) {
     alert('保存失败：' + err.message)
   }
@@ -474,7 +478,11 @@ function createThumbIframe(item, index, thumbWidth) {
   const blob = new Blob([content], { type: 'text/html' })
   const blobUrl = URL.createObjectURL(blob)
   iframe.src = blobUrl
-  iframe.onload = () => URL.revokeObjectURL(blobUrl)
+
+  // Clean up blob URL after load or on error
+  const cleanup = () => URL.revokeObjectURL(blobUrl)
+  iframe.onload = cleanup
+  iframe.onerror = cleanup
 }
 
 function refreshThumb(index) {
@@ -489,7 +497,11 @@ function refreshThumb(index) {
   const blob = new Blob([content], { type: 'text/html' })
   const blobUrl = URL.createObjectURL(blob)
   iframe.src = blobUrl
-  iframe.onload = () => URL.revokeObjectURL(blobUrl)
+
+  // Clean up blob URL after load or on error
+  const cleanup = () => URL.revokeObjectURL(blobUrl)
+  iframe.onload = cleanup
+  iframe.onerror = cleanup
 }
 
 function updateThumbnailActive() {
@@ -933,4 +945,15 @@ function showWelcome(show) {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────
 
-initApp()
+initApp().catch(err => {
+  console.error('App initialization failed:', err)
+  // Show error to user
+  const welcome = document.getElementById('welcome')
+  if (welcome) {
+    welcome.innerHTML = `
+      <div id="welcome-icon">⚠️</div>
+      <h2>初始化失败</h2>
+      <p>${err.message || '未知错误'}<br><br>请刷新页面重试</p>
+    `
+  }
+})
