@@ -10,7 +10,34 @@ let onNewPPT = null
 let onModifySlide = null
 let getState = null
 
+// Outline-first generation state
+let currentOutline = ''
+let generationPhase = 'idle' // 'idle' | 'outline' | 'ppt'
+
 // ── System Prompts ──────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT_OUTLINE = `你是一个专业的 PPT 策划师。请根据用户主题生成 PPT 大纲。
+
+输出格式（Markdown）：
+# [PPT 标题]
+
+## 第 1 页：封面
+- 主标题
+- 副标题
+
+## 第 2 页：[页面标题]
+- 要点 1
+- 要点 2
+- 要点 3
+
+## 第 3 页：[页面标题]
+...
+
+要求：
+- 每页 3-5 个要点，内容具体、有价值
+- 内容逻辑清晰，层次分明
+- 页面标题简洁有力
+- 只输出大纲，不要任何解释`
 
 const SYSTEM_PROMPT_FULL = `你是一个专业的 PPT 设计师。请生成一个完整的 HTML PPT 文件。
 
@@ -88,7 +115,11 @@ export async function initAIPanel({ onGenerate, onModify, getAppState }) {
   document.getElementById('ai-tab-memory').addEventListener('click', () => switchTab('memory'))
   document.getElementById('ai-tab-style').addEventListener('click', () => switchTab('style'))
 
-  // Generate
+  // Generate Outline
+  document.getElementById('ai-outline-btn').addEventListener('click', handleGenerateOutline)
+  document.getElementById('ai-regenerate-outline-btn').addEventListener('click', handleGenerateOutline)
+
+  // Generate PPT (from outline)
   document.getElementById('ai-generate-btn').addEventListener('click', handleGenerate)
 
   // Modify
@@ -200,9 +231,88 @@ function clearIntentHint(tab) {
   el.textContent = ''
 }
 
-// ── Generate ────────────────────────────────────────────────────────────────
+// ── Generate Outline ─────────────────────────────────────────────────────────
+
+async function handleGenerateOutline() {
+  const config = await window.electronAPI.getConfig()
+  if (!config.apiKey) {
+    alert('请先在设置中配置 API Key')
+    openSettings()
+    return
+  }
+
+  const topic = document.getElementById('ai-topic').value.trim()
+  if (!topic) {
+    document.getElementById('ai-topic').focus()
+    return
+  }
+
+  const pages = Math.max(3, Math.min(30, parseInt(document.getElementById('ai-pages').value) || 8))
+  const lang = document.getElementById('ai-lang').value
+
+  generationPhase = 'outline'
+  setGenerating(true)
+
+  const memoryContent = await getSelectedMemoryContent()
+  let userPrompt = `请为「${topic}」生成一个 ${pages} 页的 PPT 大纲。`
+  if (lang === 'en') userPrompt += '\n请用英文生成。'
+  else userPrompt += '\n请用中文生成。'
+
+  if (memoryContent) {
+    userPrompt += `\n\n参考以下背景知识：\n${memoryContent}`
+  }
+
+  showProgress('正在生成大纲...')
+
+  // Clear outline for new generation
+  currentOutline = ''
+  document.getElementById('ai-outline').value = ''
+
+  try {
+    const outline = await streamCompletion(config, SYSTEM_PROMPT_OUTLINE, userPrompt, (chunk, total) => {
+      // Real-time update outline textarea
+      currentOutline += chunk
+      const textarea = document.getElementById('ai-outline')
+      if (textarea) {
+        textarea.value = currentOutline.replace(/```markdown\n?/g, '').replace(/```\n?/g, '')
+      }
+      showProgress(`正在生成大纲... ${total} 字符`)
+    }, 8000)
+
+    currentOutline = outline.replace(/```markdown\n?/g, '').replace(/```\n?/g, '').trim()
+    document.getElementById('ai-outline').value = currentOutline
+
+    // Show outline section
+    document.getElementById('outline-section').style.display = 'block'
+    document.getElementById('ai-outline-btn').style.display = 'none'
+
+    showProgress('✓ 大纲生成完成！请确认后生成 PPT')
+    setTimeout(() => hideProgress(), 2000)
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      showProgress('✗ 生成失败：' + err.message)
+      setTimeout(() => hideProgress(), 5000)
+    } else {
+      showProgress('已停止')
+      setTimeout(() => hideProgress(), 1500)
+    }
+  } finally {
+    generationPhase = 'idle'
+    setGenerating(false)
+  }
+}
+
+// ── Generate PPT ─────────────────────────────────────────────────────────────
 
 async function handleGenerate() {
+  // Get outline from textarea (user may have edited it)
+  const outline = document.getElementById('ai-outline')?.value?.trim()
+  if (!outline) {
+    alert('请先生成大纲')
+    return
+  }
+
+  generationPhase = 'ppt'
   setGenerating(true)
 
   const config = await window.electronAPI.getConfig()
@@ -214,12 +324,6 @@ async function handleGenerate() {
   }
 
   const topic = document.getElementById('ai-topic').value.trim()
-  if (!topic) {
-    setGenerating(false)
-    document.getElementById('ai-topic').focus()
-    return
-  }
-
   const pages = Math.max(3, Math.min(30, parseInt(document.getElementById('ai-pages').value) || 8))
   const lang = document.getElementById('ai-lang').value
 
@@ -242,16 +346,16 @@ async function handleGenerate() {
     }
   }
 
-  // Build prompt with memory and style
+  // Build prompt with outline, memory and style
   const memoryContent = await getSelectedMemoryContent()
   const styleId = document.getElementById('style-template-select')?.value || ''
   const styleParams = getStyleParams()
-  const userPrompt = buildGeneratePrompt(topic, pages, lang, memoryContent, styleId, styleParams)
+  const userPrompt = buildGeneratePromptWithOutline(topic, pages, lang, outline, memoryContent, styleId, styleParams)
   const systemPrompt = buildSystemPromptWithStyle(styleId)
 
   const maxTokens = 128000
 
-  showProgress('正在生成 PPT...')
+  showProgress('正在根据大纲生成 PPT...')
 
   try {
     const html = await streamCompletion(config, systemPrompt, userPrompt, (chunk, total) => {
@@ -261,6 +365,10 @@ async function handleGenerate() {
     const clean = extractHTML(html)
     if (onNewPPT) onNewPPT(clean)
     showProgress('✓ 生成完成！', '')
+
+    // Reset outline state for next generation
+    resetOutlineState()
+
     setTimeout(() => hideProgress(), 2000)
   } catch (err) {
     if (err.name !== 'AbortError') {
@@ -271,8 +379,16 @@ async function handleGenerate() {
       setTimeout(() => hideProgress(), 1500)
     }
   } finally {
+    generationPhase = 'idle'
     setGenerating(false)
   }
+}
+
+function resetOutlineState() {
+  currentOutline = ''
+  document.getElementById('ai-outline').value = ''
+  document.getElementById('outline-section').style.display = 'none'
+  document.getElementById('ai-outline-btn').style.display = 'block'
 }
 
 // ── Modify ──────────────────────────────────────────────────────────────────
@@ -369,6 +485,37 @@ function extractSlideText(html) {
 }
 
 // ── Prompt Builders ─────────────────────────────────────────────────────────
+
+function buildGeneratePromptWithOutline(topic, pages, lang, outline, memoryContent, styleId, styleParams) {
+  let prompt = `请严格按照以下大纲结构生成 PPT，主题「${topic}」，共 ${pages} 页。
+
+## 大纲结构（必须严格遵循）
+
+${outline}
+
+## 生成要求
+
+- 每个 "## 第 N 页" 对应一个 <section data-slide="N">
+- 页面标题使用大纲中的标题
+- 要点内容展开为具体的视觉化设计
+- 必须生成从 data-slide="1" 到 data-slide="${pages}" 的全部页面`
+
+  if (lang === 'en') prompt += '\n- 请用英文生成所有文字内容。'
+  else prompt += '\n- 请用中文生成所有文字内容。'
+
+  // Append style instructions
+  if (styleId) {
+    const styleHint = buildStylePrompt(styleId, styleParams)
+    if (styleHint) prompt += styleHint
+  }
+
+  // Append memory content as background knowledge
+  if (memoryContent) {
+    prompt += `\n\n以下是相关背景知识，请据此生成更准确、专业的内容：\n\n${memoryContent}`
+  }
+
+  return prompt
+}
 
 function buildGeneratePrompt(topic, pages, lang, memoryContent, styleId, styleParams) {
   let prompt = `请生成一个关于「${topic}」的完整 PPT，严格要求 ${pages} 页。`
@@ -758,6 +905,8 @@ function toggleApiKeyVisibility() {
 // ── UI Helpers ───────────────────────────────────────────────────────────────
 
 function setGenerating(active, isModify = false) {
+  const outlineBtn = document.getElementById('ai-outline-btn')
+  const regenerateBtn = document.getElementById('ai-regenerate-outline-btn')
   const genBtn = document.getElementById('ai-generate-btn')
   const modBtn = document.getElementById('ai-modify-btn')
   const stopBtn = document.getElementById('ai-stop-btn')
@@ -765,7 +914,9 @@ function setGenerating(active, isModify = false) {
   if (isModify) {
     modBtn.disabled = active
   } else {
-    genBtn.disabled = active
+    if (outlineBtn) outlineBtn.disabled = active
+    if (regenerateBtn) regenerateBtn.disabled = active
+    if (genBtn) genBtn.disabled = active
   }
   stopBtn.classList.toggle('visible', active)
 }
@@ -855,7 +1006,19 @@ function renderAIPanel() {
           ≥20 页需使用支持长输出的模型（如 DeepSeek-V3、GPT-4o 等）
         </div>
       </div>
-      <button id="ai-generate-btn">✨ 生成 PPT</button>
+
+      <!-- Step 1: Generate Outline -->
+      <button id="ai-outline-btn">📝 生成大纲</button>
+
+      <!-- Outline Section (hidden until outline is generated) -->
+      <div id="outline-section" class="outline-section" style="display:none;">
+        <label class="form-label">大纲预览（可编辑）</label>
+        <textarea class="form-textarea outline-textarea" id="ai-outline" rows="10" placeholder="大纲将在此显示..."></textarea>
+        <div class="outline-actions">
+          <button id="ai-regenerate-outline-btn" class="btn-secondary">🔄 重新生成</button>
+          <button id="ai-generate-btn">✨ 确认并生成 PPT</button>
+        </div>
+      </div>
     </div>
 
     <!-- Modify Form -->
