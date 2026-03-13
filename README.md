@@ -175,40 +175,22 @@ npm run build:all
 
 Slide X 的开发离不开以下优秀的开源项目：
 
-### 核心框架
 - [Electron](https://www.electronjs.org/) - 跨平台桌面应用框架
 - [electron-builder](https://www.electron.build/) - Electron 应用打包工具
-
-### 编辑器
 - [CodeMirror 6](https://codemirror.net/) - 强大的代码编辑器组件
-
-### 导出功能
 - [html2canvas](https://html2canvas.hertzen.com/) - HTML 转 Canvas 截图
 - [jsPDF](https://github.com/parallax/jsPDF) - JavaScript PDF 生成库
 - [PptxGenJS](https://gitbrent.github.io/PptxGenJS/) - JavaScript PowerPoint 生成库
 - [JSZip](https://stuk.github.io/jszip/) - JavaScript ZIP 压缩库
-
-### 文档解析
 - [Mammoth](https://github.com/mwilliamson/mammoth.js) - DOCX 文档解析
 - [pdf-parse](https://www.npmjs.com/package/pdf-parse) - PDF 文档解析
-
-### UI 组件
 - [A2UI](https://github.com/nicepkg/a2ui) - Agent-to-UI 声明式交互组件库
 - [GenUI](https://github.com/nicepkg/genui) - Flutter 生成式 UI SDK
-
-### AI 服务
-- [OpenAI API](https://platform.openai.com/) - GPT 系列模型 API
-- 兼容 DeepSeek、Ollama 等 OpenAI 格式接口
-
-### 参考项目
-
-以下优秀项目为 Slide X 的设计和开发提供了宝贵的参考和灵感：
-
-- [文多多 AiPPT](https://docmee.cn) - 商用级 AI 生成 PPT 解决方案，提供 PPT 解析和反渲染能力
-- [PPTist](https://github.com/pipipi-pikachu/PPTist) - 基于 Vue 的在线 PPT 编辑器，功能完善的 Web PPT 应用
+- [文多多 AiPPT](https://docmee.cn) - 商用级 AI 生成 PPT 解决方案
+- [PPTist](https://github.com/pipipi-pikachu/PPTist) - 基于 Vue 的在线 PPT 编辑器
 - [banana-slides](https://github.com/nicepkg/banana-slides) - AI 驱动的 PPT 生成应用
-- [html2pptx](https://github.com/nicepkg/html2pptx) - HTML 转 PowerPoint 转换工具，提供文本提取和样式保留方案
-- [Anthropic Skills](https://github.com/anthropics/skills) - Claude 技能系统，包含文档生成最佳实践
+- [html2pptx](https://github.com/nicepkg/html2pptx) - HTML 转 PowerPoint 转换工具
+- [Anthropic Skills](https://github.com/anthropics/skills) - Claude 技能系统
 
 ---
 
