@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PPT Editor</title>
+  <title>Slide X</title>
   <link rel="stylesheet" href="styles.css">
 
   <!-- CDN Libraries (UMD, loaded before module scripts) -->
@@ -18,7 +18,7 @@
 
   <!-- ── Toolbar ─────────────────────────────────────────────────────── -->
   <div id="toolbar">
-    <span id="logo">PPT</span>
+    <span id="logo">Slide X</span>
 
     <button class="toolbar-btn" id="sidebar-toggle-btn" title="切换侧栏">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -119,8 +119,8 @@
         <!-- Welcome Screen -->
         <div id="welcome">
           <div id="welcome-icon">🖼</div>
-          <h2>PPT HTML Editor</h2>
-          <p>打开一个 HTML PPT 文件开始编辑<br>或使用 AI 生成全新的演示文稿<br><br>支持拖拽文件到此处</p>
+          <h2>Slide X</h2>
+          <p>打开一个 HTML 文件开始编辑<br>或使用 Slide AI 生成全新的演示文稿<br><br>支持拖拽文件到此处</p>
         </div>
 
         <!-- Preview Wrapper -->
@@ -139,13 +139,18 @@
         <button class="nav-btn" id="prev-btn" disabled title="上一页 (←)">&#8592;</button>
         <span id="page-info">0 / 0</span>
         <button class="nav-btn" id="next-btn" disabled title="下一页 (→)">&#8594;</button>
+        <div class="nav-sep"></div>
+        <button class="nav-btn preview-toggle" id="preview-toggle-btn" title="切换编辑/预览模式">
+          <span class="toggle-icon">✏️</span>
+          <span class="toggle-label">编辑</span>
+        </button>
       </div>
     </div><!-- /main-area -->
 
     <!-- AI Panel -->
     <div id="ai-panel" class="collapsed">
       <div id="ai-panel-header">
-        <span>✨ AI 助手</span>
+        <span>✨ Slide AI</span>
         <button class="toolbar-btn" id="ai-panel-close-btn" style="height:24px;padding:0 6px;" title="关闭">✕</button>
       </div>
       <!-- Content is rendered by ai-panel.js renderAIPanel() -->

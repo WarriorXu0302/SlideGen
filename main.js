@@ -147,13 +147,13 @@ function buildMenu() {
       label: '帮助',
       submenu: [
         {
-          label: '关于 PPT Editor',
+          label: '关于 Slide X',
           click: async () => {
             await dialog.showMessageBox(mainWindow, {
               type: 'info',
               title: '关于',
-              message: 'PPT HTML Editor',
-              detail: 'Version 1.0.0\n基于 Electron 构建'
+              message: 'Slide X',
+              detail: 'Version 1.0.0\nAI-powered presentation editor'
             })
           }
         }

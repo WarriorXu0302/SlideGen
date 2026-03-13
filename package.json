@@ -1,7 +1,7 @@
 {
-  "name": "ppt-html-editor",
+  "name": "slide-x",
   "version": "1.0.0",
-  "description": "HTML PPT Editor with AI generation",
+  "description": "Slide X - AI-powered presentation editor",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -19,8 +19,8 @@
     "electron-builder": "^24.0.0"
   },
   "build": {
-    "appId": "com.ppteditor.app",
-    "productName": "PPT Editor",
+    "appId": "com.slidex.app",
+    "productName": "Slide X",
     "files": ["main.js", "preload.js", "renderer/**/*", "assets/**/*"],
     "mac": {
       "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],

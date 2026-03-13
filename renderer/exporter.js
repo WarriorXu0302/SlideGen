@@ -8,6 +8,9 @@
  *   → native text boxes, editable in PowerPoint, ~80-90% visual fidelity
  */
 
+import { convertA2UIToStatic } from './a2ui-export.js'
+import { hasA2UIComponents } from './a2ui-loader.js'
+
 let exportCancelled = false
 
 // Reusable iframe to avoid DOM thrashing during batch exports
@@ -114,6 +117,13 @@ async function renderSlideToCanvas(htmlContent, scale) {
   return new Promise((resolve, reject) => {
     const iframe = getOrCreateIframe()
 
+    // Convert A2UI components to static HTML for export
+    // (html2canvas cannot render Web Components)
+    let staticContent = htmlContent
+    if (hasA2UIComponents(htmlContent)) {
+      staticContent = convertA2UIToStatic(htmlContent)
+    }
+
     // Give the browser time to render after content loads
     const capture = () => {
       setTimeout(async () => {
@@ -137,7 +147,7 @@ async function renderSlideToCanvas(htmlContent, scale) {
     }
 
     // Load via blob URL so external resources (fonts, etc.) can still load
-    const blob = new Blob([htmlContent], { type: 'text/html' })
+    const blob = new Blob([staticContent], { type: 'text/html' })
     const blobUrl = URL.createObjectURL(blob)
     iframe.src = blobUrl
     iframe.onload = () => { URL.revokeObjectURL(blobUrl); capture() }
@@ -154,7 +164,7 @@ async function exportPPTX(slides, indices, scale) {
 
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_16x9'   // 10 × 5.625 inches
-  pptx.title = 'PPT Editor Export'
+  pptx.title = 'Slide X Export'
 
   const total = indices.length
 
@@ -735,7 +745,13 @@ function loadSlideForExtraction(htmlContent, warnings = null) {
   return new Promise((resolve, reject) => {
     const iframe = getOrCreateIframe()
 
-    const blob = new Blob([htmlContent], { type: 'text/html' })
+    // Convert A2UI components to static HTML for extraction
+    let staticContent = htmlContent
+    if (hasA2UIComponents(htmlContent)) {
+      staticContent = convertA2UIToStatic(htmlContent)
+    }
+
+    const blob = new Blob([staticContent], { type: 'text/html' })
     const blobUrl = URL.createObjectURL(blob)
     iframe.src = blobUrl
     iframe.onload = async () => {
@@ -764,8 +780,8 @@ async function exportEditablePPTX(slides, indices) {
 
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_16x9'
-  pptx.title = 'PPT Editor Export'
-  pptx.author = 'PPT HTML Editor'
+  pptx.title = 'Slide X Export'
+  pptx.author = 'Slide X'
 
   const total = indices.length
   const warnings = new ExportWarnings()

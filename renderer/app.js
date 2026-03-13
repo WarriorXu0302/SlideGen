@@ -7,6 +7,7 @@ import { initEditor, setEditorContent, getEditorContent, applyEditorChanges,
          enableVisualEdit, disableVisualEdit } from './editor.js'
 import { initExporter, showExportModal } from './exporter.js'
 import { initAIPanel } from './ai-panel.js'
+import { injectA2UIRuntime, preloadA2UI, hasA2UIComponents } from './a2ui-loader.js'
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ const state = {
   undoStacks: {},     // { index: [html, ...] }
   redoStacks: {},     // { index: [html, ...] }
   editMode: 'visual', // 'visual' | 'source'
+  previewMode: false, // true = interactive preview (A2UI works), false = editable
   sidebarOpen: true,
   aiPanelOpen: false,
   editorOpen: false,
@@ -40,6 +42,9 @@ export async function initApp() {
   if (window.electronAPI.platform === 'darwin') {
     document.body.classList.add('mac')
   }
+
+  // Preload A2UI runtime for faster first render
+  preloadA2UI()
 
   // Initialize sub-modules
   await initEditor(
@@ -103,6 +108,40 @@ function setupToolbar() {
   // Nav buttons
   document.getElementById('prev-btn').addEventListener('click', () => navigate(-1))
   document.getElementById('next-btn').addEventListener('click', () => navigate(1))
+
+  // Preview/Edit mode toggle
+  document.getElementById('preview-toggle-btn').addEventListener('click', togglePreviewMode)
+}
+
+function togglePreviewMode() {
+  state.previewMode = !state.previewMode
+
+  const btn = document.getElementById('preview-toggle-btn')
+  const icon = btn.querySelector('.toggle-icon')
+  const label = btn.querySelector('.toggle-label')
+
+  if (state.previewMode) {
+    // Preview mode: disable visual editing, A2UI components work
+    btn.classList.add('preview-mode')
+    icon.textContent = '👁️'
+    label.textContent = '预览'
+
+    const iframe = document.getElementById('main-preview')
+    if (state.visualEditActive) {
+      disableVisualEdit(iframe)
+      state.visualEditActive = false
+    }
+  } else {
+    // Edit mode: enable visual editing
+    btn.classList.remove('preview-mode')
+    icon.textContent = '✏️'
+    label.textContent = '编辑'
+
+    if (state.editMode === 'visual' && state.slides.length > 0) {
+      const iframe = document.getElementById('main-preview')
+      activateVisualEdit(iframe)
+    }
+  }
 }
 
 function setupEditorModeListeners() {
@@ -429,8 +468,10 @@ function createThumbIframe(item, index, thumbWidth) {
   badge.textContent = index + 1
   item.appendChild(badge)
 
-  // Load content via blob URL
-  const blob = new Blob([state.slides[index].content], { type: 'text/html' })
+  // Load content via blob URL (inject A2UI runtime if needed)
+  let content = state.slides[index].content
+  content = injectA2UIRuntime(content)
+  const blob = new Blob([content], { type: 'text/html' })
   const blobUrl = URL.createObjectURL(blob)
   iframe.src = blobUrl
   iframe.onload = () => URL.revokeObjectURL(blobUrl)
@@ -442,7 +483,10 @@ function refreshThumb(index) {
   const iframe = item.querySelector('iframe')
   if (!iframe) return
 
-  const blob = new Blob([state.slides[index].content], { type: 'text/html' })
+  // Inject A2UI runtime if needed
+  let content = state.slides[index].content
+  content = injectA2UIRuntime(content)
+  const blob = new Blob([content], { type: 'text/html' })
   const blobUrl = URL.createObjectURL(blob)
   iframe.src = blobUrl
   iframe.onload = () => URL.revokeObjectURL(blobUrl)
@@ -470,12 +514,16 @@ function renderPreview() {
     state.visualEditActive = false
   }
 
-  const blob = new Blob([state.slides[state.currentIndex].content], { type: 'text/html' })
+  // Inject A2UI runtime if needed
+  let content = state.slides[state.currentIndex].content
+  content = injectA2UIRuntime(content)
+  const blob = new Blob([content], { type: 'text/html' })
   const blobUrl = URL.createObjectURL(blob)
   iframe.src = blobUrl
   iframe.onload = () => {
     URL.revokeObjectURL(blobUrl)
-    if (state.editMode === 'visual') {
+    // Only activate visual edit if NOT in preview mode
+    if (state.editMode === 'visual' && !state.previewMode) {
       activateVisualEdit(iframe)
     }
     scalePreview()
@@ -556,7 +604,10 @@ function toggleEditMode() {
     // Close editor and return to visual
     closeEditor()
     const iframe = document.getElementById('main-preview')
-    activateVisualEdit(iframe)
+    // Only activate visual edit if not in preview mode
+    if (!state.previewMode) {
+      activateVisualEdit(iframe)
+    }
   } else {
     // Enter source mode
     state.editMode = 'source'
@@ -724,8 +775,11 @@ async function openPresentation() {
   const total = state.slides.length
 
   // Build each slide as an iframe[srcdoc] so CSS is fully isolated
+  // Inject A2UI runtime if any slide contains A2UI components
   const slideFrames = state.slides.map((slide, i) => {
-    const encoded = slide.content.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    let content = slide.content
+    content = injectA2UIRuntime(content)
+    const encoded = content.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
     const cls = i === startIdx ? ' class="active"' : ''
     return `<iframe${cls} sandbox="allow-scripts allow-same-origin" scrolling="no" srcdoc="${encoded}"></iframe>`
   }).join('\n')
@@ -868,9 +922,9 @@ function setDirty(dirty) {
 function updateTitle() {
   const base = state.filePath
     ? state.filePath.split('/').pop().split('\\').pop()
-    : state.slides.length > 0 ? '未命名.html' : 'PPT Editor'
+    : state.slides.length > 0 ? '未命名.html' : 'Slide X'
   const prefix = state.isDirty ? '● ' : ''
-  window.electronAPI.setTitle(`${prefix}${base} — PPT Editor`)
+  window.electronAPI.setTitle(`${prefix}${base} — Slide X`)
 }
 
 function showWelcome(show) {
