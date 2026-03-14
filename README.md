@@ -9,7 +9,7 @@
 - 🎨 **风格模板**：11 种预设配色方案，胶囊按钮 + 悬停预览卡片
 - 🖼️ **图片提取风格**：上传 PPT 截图，AI 自动提取配色和布局风格
 - ✏️ **智能修改**：AI 自动识别意图，支持单页智能修改
-- 🖼️ **可视化编辑**：双击元素直接编辑，所见即所得
+- 👁️ **可视化编辑**：双击元素直接编辑，所见即所得
 - 📝 **源码编辑**：CodeMirror 代码编辑器，支持语法高亮
 - 🔄 **撤销重做**：完整的历史记录，每个幻灯片独立管理
 - 🎬 **全屏演示**：专业的演示模式，支持快捷键导航
@@ -63,8 +63,8 @@ npm start
 
 1. 切换到「附件」标签页
 2. 拖拽或点击上传文件（支持 TXT/MD/DOCX/PDF/JSON/CSV）
-3. 点击「启用」选中要使用的文件
-4. 生成时 AI 会参考这些背景知识
+3. 勾选要使用的文件（可随时切换启用/禁用）
+4. 生成时 AI 会自动注入已启用的文件内容作为背景知识
 
 ### 风格模板
 
@@ -91,7 +91,7 @@ npm start
 **可视化编辑：**
 - 双击任意文本元素直接编辑
 - Enter 键确认，Escape 键取消
-- 修改会自��同步到源码
+- 修改会自动同步到源码
 
 **源码编辑：**
 - 点击"源码"按钮打开代码编辑器
@@ -118,13 +118,14 @@ npm start
 
 | 功能 | Windows | macOS |
 |------|---------|-------|
-| 打开 | `Ctrl + O` | `Cmd + O` |
+| 打开文件 | `Ctrl + O` | `Cmd + O` |
 | 保存 | `Ctrl + S` | `Cmd + S` |
 | 另存为 | `Ctrl + Shift + S` | `Cmd + Shift + S` |
 | 撤销 | `Ctrl + Z` | `Cmd + Z` |
 | 重做 | `Ctrl + Y` | `Cmd + Y` |
-| 演示 | `F5` | `F5` |
-| 切换幻灯片 | `←→↑↓` | `←→↑↓` |
+| 开始演示 | `F5` | `F5` |
+| 退出演示 | `Esc` | `Esc` |
+| 切换幻灯片 | `← →` / `↑ ↓` | `← →` / `↑ ↓` |
 
 ## ⚙️ API 配置
 
@@ -176,12 +177,10 @@ Slide X 的开发离不开以下优秀的开源项目：
 - [JSZip](https://stuk.github.io/jszip/) - JavaScript ZIP 压缩库
 - [Mammoth](https://github.com/mwilliamson/mammoth.js) - DOCX 文档解析
 - [pdf-parse](https://www.npmjs.com/package/pdf-parse) - PDF 文档解析
-- [GenUI](https://github.com/nicepkg/genui) - Flutter 生成式 UI SDK
 - [文多多 AiPPT](https://docmee.cn) - 商用级 AI 生成 PPT 解决方案
 - [PPTist](https://github.com/pipipi-pikachu/PPTist) - 基于 Vue 的在线 PPT 编辑器
 - [banana-slides](https://github.com/nicepkg/banana-slides) - AI 驱动的 PPT 生成应用
 - [html2pptx](https://github.com/nicepkg/html2pptx) - HTML 转 PowerPoint 转换工具
-- [Anthropic Skills](https://github.com/anthropics/skills) - Claude 技能系统
 
 ---
 
