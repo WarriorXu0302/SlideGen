@@ -463,7 +463,7 @@ async function handleGenerate() {
   const styleId = selectedStyleId
   const styleParams = getStyleParams()
   // Include extracted style description if available
-  const extractedStyle = window._extractedStyleDesc || ''
+  const extractedStyle = extractedStyleDesc || ''
   const userPrompt = buildGeneratePromptWithOutline(topic, pages, lang, outline, memoryContent, styleId, styleParams, extractedStyle)
   const systemPrompt = buildSystemPromptWithStyle(styleId)
 
@@ -932,6 +932,7 @@ async function getSelectedMemoryContent() {
 let selectedStyleId = ''
 let stylePreviewPopup = null
 let hidePopupTimeout = null
+let extractedStyleDesc = null
 
 function initStylePanel() {
   const capsulesContainer = document.getElementById('style-capsules')
@@ -1186,7 +1187,7 @@ async function handleStyleImageExtract(e) {
       }
 
       // Store extracted style for later use
-      window._extractedStyleDesc = styleDesc
+      extractedStyleDesc = styleDesc
     }
   } catch (err) {
     console.error('Style extraction failed:', err)
@@ -1215,6 +1216,14 @@ function applyConfigToForms(config) {
   document.getElementById('settings-base-url').value = config.baseUrl || 'https://api.openai.com/v1'
   document.getElementById('settings-api-key').value = config.apiKey || ''
   document.getElementById('settings-model').value = config.model || 'gpt-4o'
+  const maxTokens = config.maxTokens ?? 16384
+  const temperature = config.temperature ?? 0.7
+  const topP = config.topP ?? 1.0
+  document.getElementById('settings-max-tokens').value = maxTokens
+  document.getElementById('settings-temperature').value = temperature
+  document.getElementById('settings-top-p').value = topP
+  document.getElementById('settings-temp-val').textContent = parseFloat(temperature).toFixed(2)
+  document.getElementById('settings-topp-val').textContent = parseFloat(topP).toFixed(2)
 
   // Style form
   if (config.styleConfig) {
@@ -1250,7 +1259,7 @@ function updateStylePreview() {
   if (!previewEl) return
 
   // Don't override if we have an extracted style
-  if (window._extractedStyleDesc && !templateId) {
+  if (extractedStyleDesc && !templateId) {
     return
   }
 
@@ -1284,7 +1293,7 @@ function updateStylePreview() {
 
   // Clear extracted style when a template is selected
   if (templateId) {
-    window._extractedStyleDesc = null
+    extractedStyleDesc = null
   }
 }
 
@@ -1400,18 +1409,7 @@ function isValidUrl(urlString) {
 }
 
 async function loadSettingsToForm() {
-  const config = await window.electronAPI.getConfig()
-  document.getElementById('settings-base-url').value = config.baseUrl || 'https://api.openai.com/v1'
-  document.getElementById('settings-api-key').value = config.apiKey || ''
-  document.getElementById('settings-model').value = config.model || 'gpt-4o'
-  const maxTokens = config.maxTokens ?? 16384
-  const temperature = config.temperature ?? 0.7
-  const topP = config.topP ?? 1.0
-  document.getElementById('settings-max-tokens').value = maxTokens
-  document.getElementById('settings-temperature').value = temperature
-  document.getElementById('settings-top-p').value = topP
-  document.getElementById('settings-temp-val').textContent = parseFloat(temperature).toFixed(2)
-  document.getElementById('settings-topp-val').textContent = parseFloat(topP).toFixed(2)
+  applyConfigToForms(await window.electronAPI.getConfig())
 }
 
 async function saveSettings() {
