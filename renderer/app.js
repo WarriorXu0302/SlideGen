@@ -311,6 +311,7 @@ async function importPPTXFile() {
     state.redoStacks = {}
     state.filePath = null
     setDirty(true)
+    showWelcome(false)
     renderThumbnails()
     renderPreview()
     updateTitle()
