@@ -227,13 +227,12 @@ async function exportImages(slides, indices, scale, format) {
   updateProgress(indices.length, indices.length, '打包中...')
 
   cleanupCachedIframe()
+  const ext = format === 'jpeg' ? 'jpg' : 'png'
   if (images.length === 1) {
-    const ext = format === 'jpeg' ? 'jpg' : 'png'
     downloadDataUrl(images[0].dataUrl, `slide-${images[0].index + 1}.${ext}`)
   } else {
     const zip = new JSZip()
     for (const { dataUrl, index } of images) {
-      const ext = format === 'jpeg' ? 'jpg' : 'png'
       zip.file(`slide-${String(index + 1).padStart(2, '0')}.${ext}`, dataUrl.split(',')[1], { base64: true })
     }
     const blob = await zip.generateAsync({ type: 'blob' })
@@ -790,7 +789,12 @@ async function extractChartElements(iframeDoc, warnings = null) {
     '[class*="plotly"]',
   ].join(',')
 
-  for (const el of iframeDoc.querySelectorAll(selector)) {
+  const matched = Array.from(iframeDoc.querySelectorAll(selector))
+
+  for (const el of matched) {
+    // Skip elements nested inside another matched element
+    // (e.g. a <canvas> inside a [data-role="chart"] container — capture only the outermost)
+    if (matched.some(other => other !== el && other.contains(el))) continue
     const rect = el.getBoundingClientRect()
     if (rect.width < 10 || rect.height < 10) continue
     if (rect.left > SLIDE_W || rect.top > SLIDE_H) continue
