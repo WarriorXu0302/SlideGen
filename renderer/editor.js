@@ -243,11 +243,18 @@ function handleVisualDblClick(e) {
   sel.removeAllRanges()
   sel.addRange(range)
 
-  el.addEventListener('blur', () => commitEdit(el), { once: true })
-  el.addEventListener('keydown', (e) => {
+  // Clean up any previous listeners to prevent duplicates
+  const handleBlur = () => {
+    commitEdit(el)
+    el.removeEventListener('keydown', handleKeydown)
+  }
+  const handleKeydown = (e) => {
     if (e.key === 'Escape') { el.blur() }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur() }
-  }, { once: true })
+  }
+
+  el.addEventListener('blur', handleBlur, { once: true })
+  el.addEventListener('keydown', handleKeydown)
 }
 
 function commitEdit(el) {

@@ -95,10 +95,12 @@ const FALLBACK_CONVERTERS = {
     const value = el.getAttribute('value') || '50'
     const min = el.getAttribute('minValue') || '0'
     const max = el.getAttribute('maxValue') || '100'
-    const percent = ((parseFloat(value) - parseFloat(min)) / (parseFloat(max) - parseFloat(min))) * 100
+    const range = parseFloat(max) - parseFloat(min)
+    // Prevent divide by zero
+    const percent = range !== 0 ? ((parseFloat(value) - parseFloat(min)) / range) * 100 : 0
     return `<div class="a2ui-fb-slider">
       <div class="a2ui-fb-slider__track">
-        <div class="a2ui-fb-slider__fill" style="width: ${percent}%"></div>
+        <div class="a2ui-fb-slider__fill" style="width: ${Math.max(0, Math.min(100, percent))}%"></div>
       </div>
       <span class="a2ui-fb-slider__value">${escapeHtml(value)}</span>
     </div>`
@@ -200,7 +202,8 @@ function processChildNodes(el) {
 
   return Array.from(el.childNodes).map(node => {
     if (node.nodeType === Node.TEXT_NODE) {
-      return node.textContent
+      // Escape text content to prevent XSS
+      return escapeHtml(node.textContent)
     }
     if (node.nodeType === Node.ELEMENT_NODE) {
       return convertElement(node)

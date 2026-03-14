@@ -77,12 +77,10 @@ const A2UI_COMPONENTS_SCRIPT = `
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
+      this._clickHandler = null;
     }
     connectedCallback() {
       this.render();
-      this.shadowRoot.querySelector('button').addEventListener('click', (e) => {
-        this.dispatchEvent(new CustomEvent('a2ui-click', { bubbles: true, detail: { label: this.getAttribute('label') } }));
-      });
     }
     static get observedAttributes() { return ['label', 'variant', 'disabled']; }
     attributeChangedCallback() { if (this.shadowRoot) this.render(); }
@@ -129,6 +127,16 @@ const A2UI_COMPONENTS_SCRIPT = `
         </style>
         <button \${disabled ? 'disabled' : ''}>\${label}</button>
       \`;
+
+      // Set up click handler with cleanup to prevent duplicates
+      const btn = this.shadowRoot.querySelector('button');
+      if (this._clickHandler) {
+        btn.removeEventListener('click', this._clickHandler);
+      }
+      this._clickHandler = () => {
+        this.dispatchEvent(new CustomEvent('a2ui-click', { bubbles: true, detail: { label: this.getAttribute('label') } }));
+      };
+      btn.addEventListener('click', this._clickHandler);
     }
   }
   if (!customElements.get('a2ui-button')) {
@@ -265,26 +273,35 @@ const A2UI_COMPONENTS_SCRIPT = `
     constructor() {
       super();
       this.attachShadow({ mode: 'open' });
+      this._inputHandler = null;
     }
-    connectedCallback() { this.render(); this.setupEvents(); }
+    connectedCallback() { this.render(); }
     static get observedAttributes() { return ['value', 'minValue', 'maxValue']; }
     attributeChangedCallback() { if (this.shadowRoot.querySelector('input')) this.render(); }
 
     setupEvents() {
       const input = this.shadowRoot.querySelector('input');
-      if (input) {
-        input.addEventListener('input', (e) => {
-          this.setAttribute('value', e.target.value);
-          this.dispatchEvent(new CustomEvent('a2ui-change', { bubbles: true, detail: { value: e.target.value } }));
-        });
+      if (!input) return;
+
+      // Remove existing listener to prevent duplicates
+      if (this._inputHandler) {
+        input.removeEventListener('input', this._inputHandler);
       }
+
+      this._inputHandler = (e) => {
+        this.setAttribute('value', e.target.value);
+        this.dispatchEvent(new CustomEvent('a2ui-change', { bubbles: true, detail: { value: e.target.value } }));
+      };
+      input.addEventListener('input', this._inputHandler);
     }
 
     render() {
       const min = sanitizeNumber(this.getAttribute('minValue'), 0, -1000000, 1000000);
       const max = sanitizeNumber(this.getAttribute('maxValue'), 100, -1000000, 1000000);
       const value = sanitizeNumber(this.getAttribute('value'), 50, min, max);
-      const percent = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+      // Prevent divide by zero
+      const range = max - min;
+      const percent = range !== 0 ? Math.max(0, Math.min(100, ((value - min) / range) * 100)) : 0;
 
       this.shadowRoot.innerHTML = \`
         <style>

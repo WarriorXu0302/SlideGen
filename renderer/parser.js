@@ -36,8 +36,8 @@ export function parseHTML(htmlString) {
       docOuter: buildOuterTemplate(doc),
       slides: Array.from(iframeSlides).map((iframe, i) => {
         const srcdocHTML = iframe.getAttribute('srcdoc')
-        const titleMatch = srcdocHTML.match(/<title[^>]*>([^<]*)<\/title>/i)
-        const rawTitle = titleMatch ? titleMatch[1].trim() : `幻灯片 ${i + 1}`
+        // Use DOM parsing instead of regex for title extraction (safer)
+        const rawTitle = extractTitleFromHTML(srcdocHTML) || `幻灯片 ${i + 1}`
         return {
           content: srcdocHTML,
           rawHtml: srcdocHTML,
@@ -239,4 +239,18 @@ function escapeForAttr(html) {
 
 function escapeAttr(str) {
   return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Extract title from HTML string using DOM parsing (safer than regex)
+ */
+function extractTitleFromHTML(html) {
+  if (!html) return null
+  try {
+    const tempDoc = new DOMParser().parseFromString(html, 'text/html')
+    const titleEl = tempDoc.querySelector('title')
+    return titleEl ? titleEl.textContent.trim() : null
+  } catch {
+    return null
+  }
 }

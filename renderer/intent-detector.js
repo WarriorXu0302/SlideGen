@@ -52,6 +52,8 @@ export function detectIntent(input, hasExistingSlides = false) {
   }
 
   // Check modify patterns (stronger signal)
+  // Note: patterns contain Chinese chars which are case-insensitive,
+  // but we test against original input to preserve pattern matching accuracy
   for (const pattern of CONTEXT_MODIFY_PATTERNS) {
     if (pattern.test(input)) modifyScore += 2
   }
