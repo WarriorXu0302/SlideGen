@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openPresentation: (htmlContent, startIndex) =>
     ipcRenderer.invoke('open-presentation', htmlContent, startIndex),
 
+  // PPTX import
+  openPptxFile: () => ipcRenderer.invoke('open-pptx-file'),
+
   // Memory files
   showMemoryFileDialog: () => ipcRenderer.invoke('show-memory-file-dialog'),
   parseMemoryFile: (filePath) => ipcRenderer.invoke('parse-memory-file', filePath),

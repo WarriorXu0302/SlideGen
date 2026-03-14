@@ -367,6 +367,18 @@ ipcMain.handle('get-path', (event, name) => {
   return app.getPath(name)
 })
 
+ipcMain.handle('open-pptx-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    filters: [{ name: 'PowerPoint Files', extensions: ['pptx'] }],
+    properties: ['openFile']
+  })
+  if (result.canceled || !result.filePaths.length) return null
+  const filePath = result.filePaths[0]
+  const buffer = await fsPromises.readFile(filePath)
+  // Transfer as plain array so it can pass through IPC serialization
+  return { filePath, data: Array.from(buffer) }
+})
+
 ipcMain.on('set-title', (event, title) => {
   if (mainWindow) mainWindow.setTitle(title)
 })

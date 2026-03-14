@@ -493,6 +493,55 @@ body.mac #toolbar { padding-left: 84px; }
   content: '👁️';
 }
 
+/* ── Notes Panel ───────────────────────────────────────────────────────── */
+.notes-panel {
+  flex-shrink: 0;
+  background: rgba(13, 13, 26, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  max-height: 180px;
+}
+.notes-panel.collapsed {
+  max-height: 36px;
+}
+.notes-toggle {
+  height: 36px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  border-bottom: 1px solid transparent;
+  transition: color var(--transition-fast);
+}
+.notes-panel:not(.collapsed) .notes-toggle {
+  border-bottom-color: var(--border);
+  color: var(--text-primary);
+}
+.notes-toggle:hover { color: var(--text-primary); }
+.notes-textarea {
+  flex: 1;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  line-height: 1.5;
+}
+.notes-textarea::placeholder { color: var(--text-muted, var(--text-secondary)); opacity: 0.5; }
+
 /* ── AI Panel ──────────────────────────────────────────────────────────── */
 #ai-panel {
   width: var(--ai-panel-w);

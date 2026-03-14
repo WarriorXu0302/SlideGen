@@ -137,7 +137,7 @@ async function renderSlideToCanvas(htmlContent, scale) {
     }
 
     // Load via blob URL so external resources (fonts, etc.) can still load
-    const blob = new Blob([staticContent], { type: 'text/html' })
+    const blob = new Blob([htmlContent], { type: 'text/html' })
     const blobUrl = URL.createObjectURL(blob)
     iframe.src = blobUrl
     iframe.onload = () => { URL.revokeObjectURL(blobUrl); capture() }
@@ -502,23 +502,42 @@ function extractTextElements(iframeDoc, warnings = null) {
   const elements = []
   const addedTexts = new Set()
 
-  const candidates = iframeDoc.querySelectorAll(
+  // Collect elements with data-role first (semantic priority), then fallback selectors
+  const semanticEls = Array.from(iframeDoc.querySelectorAll('[data-role]'))
+  const semanticSet = new Set(semanticEls)
+
+  const fallbackEls = Array.from(iframeDoc.querySelectorAll(
     'h1,h2,h3,h4,h5,h6,p,li,td,th,span,div,' +
     '[class*="title"],[class*="heading"],[class*="subtitle"],' +
     '[class*="content"],[class*="text"],[class*="body"],' +
     '[class*="label"],[class*="stat"],[class*="number"]'
-  )
+  ))
+
+  // Semantic elements come first; fallback elements fill in the rest
+  const candidates = [...semanticEls, ...fallbackEls.filter(el => !semanticSet.has(el))]
 
   for (const el of candidates) {
+    const role = el.getAttribute('data-role')
+
+    // Skip notes and chart elements — notes are hidden by design, charts handled separately
+    if (role === 'notes' || role === 'chart') continue
+
+    // Skip text inside chart containers (already captured as images)
+    if (!role && el.closest('[data-role="chart"]')) continue
+
     const text = (el.innerText || el.textContent || '').trim()
     if (!text || text.length < 1) continue
-    if (addedTexts.has(text)) continue
 
-    // Check if this is a leaf text node (no child elements with their own text)
-    const hasTextChildren = Array.from(el.children).some(child =>
-      (child.innerText || '').trim().length > 0
-    )
-    if (hasTextChildren && el.children.length > 0) continue
+    // Semantic elements bypass dedup (same text may appear in title + body legitimately)
+    if (!role && addedTexts.has(text)) continue
+
+    // For non-semantic elements, skip containers that have text children
+    if (!role) {
+      const hasTextChildren = Array.from(el.children).some(child =>
+        (child.innerText || '').trim().length > 0
+      )
+      if (hasTextChildren && el.children.length > 0) continue
+    }
 
     const style = iframeDoc.defaultView.getComputedStyle(el)
     if (style.display === 'none' || style.visibility === 'hidden') continue
@@ -530,19 +549,19 @@ function extractTextElements(iframeDoc, warnings = null) {
 
     const baseFontSizePt = Math.round(parseFloat(style.fontSize) * 72 / 96)
     const fontWeight = parseInt(style.fontWeight)
+    const fontFaceForMeasure = extractFontFamily(style.fontFamily)
 
-    // Calculate optimal font size to prevent overflow
     const widthPt = (rect.width / 96) * 72
     const heightPt = (rect.height / 96) * 72
-    const optimizedFontSize = calculateFontSize(widthPt, heightPt, text, baseFontSizePt)
+    const optimizedFontSize = calculateFontSize(widthPt, heightPt, text, baseFontSizePt, fontFaceForMeasure)
 
-    // Track if font was scaled down significantly
     if (warnings && optimizedFontSize < baseFontSizePt * 0.7) {
       warnings.addTextScaled(text, baseFontSizePt, optimizedFontSize)
     }
 
     elements.push({
       type: 'text',
+      role: role || null,
       text,
       x: Math.max(0, rect.left / SLIDE_W * PPT_W),
       y: Math.max(0, rect.top / SLIDE_H * PPT_H),
@@ -563,41 +582,57 @@ function extractTextElements(iframeDoc, warnings = null) {
 }
 
 /**
- * Calculate optimal font size to prevent text overflow in PowerPoint
- * CJK-aware: Chinese/Japanese/Korean characters are wider than Latin
+ * Calculate optimal font size to prevent text overflow in PowerPoint.
+ * Uses canvas measureText() for precise per-character width measurement.
+ * Supports CJK character-level line wrapping.
  */
-function calculateFontSize(widthPt, heightPt, text, baseFontSize) {
-  // Guard against invalid inputs
+function calculateFontSize(widthPt, heightPt, text, baseFontSize, fontFamily = 'Arial') {
   if (!text || widthPt <= 0 || heightPt <= 0 || baseFontSize <= 0) {
     return Math.max(8, Math.min(baseFontSize || 12, 96))
   }
 
-  // Count CJK and non-CJK characters
-  const cjkCount = [...text].filter(c =>
-    (c >= '\u4e00' && c <= '\u9fff') ||  // CJK Unified Ideographs
-    (c >= '\u3040' && c <= '\u30ff') ||  // Hiragana + Katakana
-    (c >= '\uac00' && c <= '\ud7af')     // Korean Hangul
-  ).length
-  const nonCjkCount = text.length - cjkCount
+  const ctx = _getMeasureCanvas().getContext('2d')
+  const toPx = pt => pt * 96 / 72
 
-  // Estimate text width: CJK chars ~1em, Latin chars ~0.5em on average
-  const estimatedTextWidth = (cjkCount * 1.0 + nonCjkCount * 0.55) * baseFontSize
+  let fontSize = Math.min(baseFontSize, 96)
+  const MIN_SIZE = 8
 
-  // Calculate lines needed
-  const linesNeeded = Math.ceil(estimatedTextWidth / Math.max(widthPt, 1))
-  const lineHeight = baseFontSize * 1.3  // typical line height
+  while (fontSize >= MIN_SIZE) {
+    ctx.font = `${toPx(fontSize)}px ${fontFamily}`
+    const lineHeightPx = toPx(fontSize) * 1.3
+    const widthPx = toPx(widthPt)
+    const heightPx = toPx(heightPt)
 
-  // Calculate total height required
-  const totalHeight = linesNeeded * lineHeight
+    // Character-level wrapping (works for CJK and Latin)
+    let line = ''
+    let lines = 1
+    for (const char of text) {
+      const testLine = line + char
+      if (ctx.measureText(testLine).width > widthPx && line.length > 0) {
+        lines++
+        line = char
+      } else {
+        line = testLine
+      }
+    }
 
-  // If text would overflow, scale down
-  if (totalHeight > heightPt && heightPt > 0) {
-    const scaleFactor = heightPt / totalHeight
-    const scaledSize = Math.floor(baseFontSize * scaleFactor)
-    return Math.max(8, Math.min(scaledSize, 96))  // clamp between 8-96pt
+    if (lines * lineHeightPx <= heightPx) return fontSize
+
+    fontSize -= fontSize <= 22 ? 1 : 2
   }
 
-  return Math.max(8, Math.min(baseFontSize, 96))
+  return MIN_SIZE
+}
+
+/** Singleton offscreen canvas for text measurement (avoids repeated DOM creation) */
+let _measureCanvas = null
+function _getMeasureCanvas() {
+  if (!_measureCanvas) {
+    _measureCanvas = document.createElement('canvas')
+    _measureCanvas.width = 2000
+    _measureCanvas.height = 100
+  }
+  return _measureCanvas
 }
 
 function extractFontFamily(cssFontFamily) {
@@ -739,6 +774,78 @@ async function extractImageElements(iframeDoc, warnings = null) {
   return images
 }
 
+/**
+ * Extract canvas/SVG/chart elements as images for editable PPTX export.
+ * Handles: data-role="chart", <canvas>, <svg>, and common chart library containers.
+ */
+async function extractChartElements(iframeDoc, warnings = null) {
+  const charts = []
+  const selector = [
+    '[data-role="chart"]',
+    'canvas',
+    'svg:not([aria-hidden="true"])',
+    '[class*="chart"]',
+    '[class*="echarts"]',
+    '[class*="highcharts"]',
+    '[class*="plotly"]',
+  ].join(',')
+
+  for (const el of iframeDoc.querySelectorAll(selector)) {
+    const rect = el.getBoundingClientRect()
+    if (rect.width < 10 || rect.height < 10) continue
+    if (rect.left > SLIDE_W || rect.top > SLIDE_H) continue
+
+    try {
+      let dataUrl = null
+      const tag = el.tagName.toLowerCase()
+
+      if (tag === 'canvas') {
+        // Direct canvas → PNG
+        dataUrl = el.toDataURL('image/png')
+      } else if (tag === 'svg') {
+        // Serialize SVG → blob URL → canvas → PNG
+        const svgData = new XMLSerializer().serializeToString(el)
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml' })
+        const url = URL.createObjectURL(svgBlob)
+        dataUrl = await new Promise((res, rej) => {
+          const img = new Image()
+          img.onload = () => {
+            const c = document.createElement('canvas')
+            c.width = rect.width
+            c.height = rect.height
+            c.getContext('2d').drawImage(img, 0, 0, rect.width, rect.height)
+            URL.revokeObjectURL(url)
+            res(c.toDataURL('image/png'))
+          }
+          img.onerror = (e) => { URL.revokeObjectURL(url); rej(e) }
+          img.src = url
+        })
+      } else {
+        // Generic element — use html2canvas on the iframe body, crop to element rect
+        if (typeof html2canvas === 'undefined') continue
+        const fullCanvas = await html2canvas(el, { useCORS: true, scale: 1, logging: false })
+        dataUrl = fullCanvas.toDataURL('image/png')
+      }
+
+      if (!dataUrl || dataUrl === 'data:,') continue
+
+      charts.push({
+        type: 'chart-image',
+        data: dataUrl,
+        x: Math.max(0, rect.left / SLIDE_W * PPT_W),
+        y: Math.max(0, rect.top / SLIDE_H * PPT_H),
+        w: Math.max(0.1, rect.width / SLIDE_W * PPT_W),
+        h: Math.max(0.1, rect.height / SLIDE_H * PPT_H),
+      })
+    } catch (e) {
+      console.warn('Failed to extract chart element:', e)
+      if (warnings) warnings.addImageFailed('chart element', e.message || 'capture error')
+    }
+  }
+
+  return charts
+}
+
 function loadSlideForExtraction(htmlContent, warnings = null) {
   return new Promise((resolve, reject) => {
     const iframe = getOrCreateIframe()
@@ -755,8 +862,9 @@ function loadSlideForExtraction(htmlContent, warnings = null) {
         const textElements = extractTextElements(doc, warnings)
         const shapeElements = extractShapeElements(doc)
         const imageElements = await extractImageElements(doc, warnings)
+        const chartElements = await extractChartElements(doc, warnings)
         const background = extractSlideBackground(doc)
-        resolve({ textElements, shapeElements, imageElements, background })
+        resolve({ textElements, shapeElements, imageElements, chartElements, background })
       } catch (err) {
         reject(err)
       }
@@ -782,7 +890,7 @@ async function exportEditablePPTX(slides, indices) {
     if (exportCancelled) return
     updateProgress(i, total, `提取第 ${indices[i] + 1} 页元素...`)
 
-    const { textElements, shapeElements, imageElements, background } =
+    const { textElements, shapeElements, imageElements, chartElements, background } =
       await loadSlideForExtraction(slides[indices[i]].content, warnings)
 
     const slide = pptx.addSlide()
@@ -838,6 +946,22 @@ async function exportEditablePPTX(slides, indices) {
       }
     }
 
+    // Add chart/canvas/SVG elements as images
+    for (const chart of chartElements) {
+      try {
+        slide.addImage({
+          data: chart.data,
+          x: chart.x,
+          y: chart.y,
+          w: chart.w,
+          h: chart.h,
+        })
+      } catch (e) {
+        console.warn('Failed to add chart image:', e)
+        warnings.addImageFailed('chart element', e.message)
+      }
+    }
+
     // Add text elements (top layer)
     for (const el of textElements) {
       try {
@@ -861,6 +985,12 @@ async function exportEditablePPTX(slides, indices) {
         console.warn('Failed to add text:', e)
         warnings.addTextFailed(el.text, e.message)
       }
+    }
+
+    // Add speaker notes
+    const notes = slides[indices[i]].notes
+    if (notes) {
+      try { slide.addNotes(notes) } catch (e) { /* pptxgenjs version may not support addNotes */ }
     }
   }
 

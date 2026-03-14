@@ -21,7 +21,8 @@ export function parseHTML(htmlString) {
       slides: Array.from(sectionSlides).map((section, i) => ({
         content: buildStandaloneDoc(headHTML, section.outerHTML),
         rawHtml: section.outerHTML,
-        title: section.getAttribute('data-title') || `幻灯片 ${i + 1}`
+        title: section.getAttribute('data-title') || `幻灯片 ${i + 1}`,
+        notes: extractNotesFromElement(section)
       }))
     }
   }
@@ -41,7 +42,8 @@ export function parseHTML(htmlString) {
         return {
           content: srcdocHTML,
           rawHtml: srcdocHTML,
-          title: rawTitle
+          title: rawTitle,
+          notes: extractNotesFromHTML(srcdocHTML)
         }
       })
     }
@@ -57,7 +59,8 @@ export function parseHTML(htmlString) {
       slides: Array.from(genericSlides).map((el, i) => ({
         content: buildStandaloneDoc(headHTML, el.outerHTML),
         rawHtml: el.outerHTML,
-        title: `幻灯片 ${i + 1}`
+        title: `幻灯片 ${i + 1}`,
+        notes: extractNotesFromElement(el)
       }))
     }
   }
@@ -70,7 +73,8 @@ export function parseHTML(htmlString) {
     slides: [{
       content: htmlString,
       rawHtml: htmlString,
-      title: doc.title || '幻灯片 1'
+      title: doc.title || '幻灯片 1',
+      notes: extractNotesFromHTML(htmlString)
     }]
   }
 }
@@ -239,6 +243,27 @@ function escapeForAttr(html) {
 
 function escapeAttr(str) {
   return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Extract speaker notes text from a DOM element (data-role="notes")
+ */
+function extractNotesFromElement(el) {
+  const notesEl = el.querySelector('[data-role="notes"]')
+  return notesEl ? (notesEl.textContent || '').trim() : ''
+}
+
+/**
+ * Extract speaker notes text from an HTML string
+ */
+function extractNotesFromHTML(html) {
+  if (!html) return ''
+  try {
+    const tempDoc = new DOMParser().parseFromString(html, 'text/html')
+    return extractNotesFromElement(tempDoc.body)
+  } catch {
+    return ''
+  }
 }
 
 /**

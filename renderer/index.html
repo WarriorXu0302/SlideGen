@@ -43,6 +43,14 @@
       打开
     </button>
 
+    <button class="toolbar-btn" id="import-pptx-btn" title="导入 PPTX 文件">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M2 4h5l1.5 1.5H14V13H2V4z"/>
+        <line x1="8" y1="6" x2="8" y2="11"/><polyline points="5.5,8.5 8,11 10.5,8.5"/>
+      </svg>
+      导入
+    </button>
+
     <button class="toolbar-btn" id="save-btn" title="保存 (Ctrl+S)">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M3 2h8l3 3v9H2V2zM5 2v4h6V2M5 9h6v5H5z"/>
@@ -153,6 +161,12 @@
           <span class="toggle-icon">✏️</span>
           <span class="toggle-label">编辑</span>
         </button>
+      </div>
+
+      <!-- Notes Panel -->
+      <div id="notes-panel" class="notes-panel collapsed">
+        <div id="notes-toggle" class="notes-toggle">📝 备注</div>
+        <textarea id="notes-content" class="notes-textarea" placeholder="演讲者备注..."></textarea>
       </div>
     </div><!-- /main-area -->
 

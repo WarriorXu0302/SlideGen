@@ -3,6 +3,7 @@
  */
 
 import { parseHTML, reconstructHTML } from './parser.js'
+import { importPPTX } from './pptx-importer.js'
 import { initEditor, setEditorContent, getEditorContent, applyEditorChanges,
          enableVisualEdit, disableVisualEdit } from './editor.js'
 import { initExporter, showExportModal } from './exporter.js'
@@ -11,7 +12,7 @@ import { initAIPanel } from './ai-panel.js'
 // ── State ──────────────────────────────────────────────────────────────────
 
 const state = {
-  slides: [],         // [{ content: string, rawHtml: string, title: string }]
+  slides: [],         // [{ content: string, rawHtml: string, title: string, notes: string }]
   currentIndex: 0,
   filePath: null,
   isDirty: false,
@@ -67,6 +68,7 @@ export async function initApp() {
   setupEditorResize()
   setupMenuListeners()
   setupEditorModeListeners()
+  setupNotesPanel()
 
   // Show welcome
   showWelcome(true)
@@ -80,6 +82,7 @@ function setupToolbar() {
 
   // File ops
   document.getElementById('open-btn').addEventListener('click', openFile)
+  document.getElementById('import-pptx-btn').addEventListener('click', importPPTXFile)
   document.getElementById('save-btn').addEventListener('click', saveFile)
 
   // Undo / Redo
@@ -285,6 +288,36 @@ async function newFile() {
   renderAll()
   showWelcome(true)
   updateTitle()
+}
+
+async function importPPTXFile() {
+  if (!await checkUnsaved()) return
+  try {
+    const result = await window.electronAPI.openPptxFile()
+    if (!result) return  // cancelled
+
+    const importedSlides = await importPPTX(result.data)
+    if (!importedSlides.length) {
+      alert('未能从该 PPTX 文件中提取幻灯片内容')
+      return
+    }
+
+    state.slides = importedSlides
+    state.format = 'section-data-slide'
+    state.docHead = ''
+    state.docOuter = null
+    state.currentIndex = 0
+    state.undoStacks = {}
+    state.redoStacks = {}
+    state.filePath = null
+    setDirty(true)
+    renderThumbnails()
+    renderPreview()
+    updateTitle()
+  } catch (e) {
+    console.error('PPTX import failed:', e)
+    alert('导入失败：' + (e.message || '未知错误'))
+  }
 }
 
 async function saveFile() {
@@ -535,6 +568,7 @@ function renderPreview() {
   updatePageInfo()
   updateNavButtons()
   updateEditorContent()
+  updateNotesPanel()
 }
 
 function scalePreview() {
@@ -598,6 +632,35 @@ function updatePageInfo() {
     state.slides.length > 0
       ? `${state.currentIndex + 1} / ${state.slides.length}`
       : '0 / 0'
+}
+
+// ── Notes Panel ───────────────────────────────────────────────────────────
+
+function updateNotesPanel() {
+  const textarea = document.getElementById('notes-content')
+  if (!textarea) return
+  const slide = state.slides[state.currentIndex]
+  textarea.value = slide ? (slide.notes || '') : ''
+}
+
+function setupNotesPanel() {
+  const toggle = document.getElementById('notes-toggle')
+  const panel = document.getElementById('notes-panel')
+  const textarea = document.getElementById('notes-content')
+  if (!toggle || !panel || !textarea) return
+
+  toggle.addEventListener('click', () => {
+    panel.classList.toggle('collapsed')
+  })
+
+  textarea.addEventListener('input', () => {
+    if (state.slides.length === 0) return
+    state.slides[state.currentIndex] = {
+      ...state.slides[state.currentIndex],
+      notes: textarea.value
+    }
+    setDirty(true)
+  })
 }
 
 // ── Edit Mode ─────────────────────────────────────────────────────────────
