@@ -1339,7 +1339,9 @@ async function streamCompletion(config, systemPrompt, userPrompt, onChunk, maxTo
       stream: true,
       max_tokens: resolvedMaxTokens,
       temperature,
-      top_p: topP
+      // Only send top_p when explicitly changed from default (1.0),
+      // because some models (Claude via Bedrock) reject requests with both params.
+      ...(topP !== 1.0 ? { top_p: topP } : {})
     }),
     signal: currentAbortController.signal
   })
