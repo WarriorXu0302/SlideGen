@@ -580,8 +580,19 @@ function extractRichTextRuns(el, iframeDoc, elStyle) {
   const runs = []
   walkNodeForRuns(el, runs, baseStyle, iframeDoc)
 
-  // Filter empty runs
-  const nonEmpty = runs.filter(r => r.text.trim().length > 0)
+  // Filter newline-only runs but preserve breakLine markers and space word-separators.
+  // Whitespace text nodes between block elements carry breakLine from walkNodeForRuns;
+  // discarding them with a naive trim() filter silently drops paragraph breaks.
+  // Space-only runs (e.g. between <b>Hello</b> and <i>World</i>) must be kept.
+  const nonEmpty = []
+  for (const run of runs) {
+    if (run.text.replace(/[\n\r]/g, '').length > 0) {
+      nonEmpty.push(run)
+    } else if (run.options.breakLine && nonEmpty.length > 0) {
+      // Transfer the breakLine to the previous kept run so it isn't lost
+      nonEmpty[nonEmpty.length - 1].options.breakLine = true
+    }
+  }
   if (nonEmpty.length === 0) return null
 
   // Only return as rich runs when there IS formatting variation between runs
@@ -591,7 +602,8 @@ function extractRichTextRuns(el, iframeDoc, elStyle) {
     r.options.italic    !== baseStyle.italic    ||
     r.options.underline !== baseStyle.underline ||
     r.options.color     !== baseStyle.color     ||
-    r.options.fontSize  !== baseStyle.fontSize
+    r.options.fontSize  !== baseStyle.fontSize  ||
+    r.options.fontFace  !== baseStyle.fontFace
   )
   return hasVariation ? nonEmpty : null
 }
