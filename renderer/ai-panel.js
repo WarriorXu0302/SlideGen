@@ -223,6 +223,11 @@ async function handleGenerateOutline() {
   // Guard against overlapping requests
   if (generationPhase !== 'idle') return
 
+  if (!_promptOutline) {
+    alert('系统提示词加载失败，请重启应用')
+    return
+  }
+
   const config = await window.electronAPI.getConfig()
   if (!config.apiKey) {
     alert('请先在设置中配置 API Key')
@@ -309,6 +314,11 @@ async function handleGenerateOutline() {
 async function handleGenerate() {
   // Guard against overlapping requests
   if (generationPhase !== 'idle') return
+
+  if (!_promptPPT) {
+    alert('系统提示词加载失败，请重启应用')
+    return
+  }
 
   // Get outline from textarea (user may have edited it)
   const outline = document.getElementById('ai-outline')?.value?.trim()
@@ -456,6 +466,12 @@ function renderOutlinePreview(markdown) {
 
 async function handleModify() {
   setGenerating(true, true)
+
+  if (!_promptModify) {
+    setGenerating(false, true)
+    alert('系统提示词加载失败，请重启应用')
+    return
+  }
 
   const config = await window.electronAPI.getConfig()
   if (!config.apiKey) {

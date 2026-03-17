@@ -88,15 +88,11 @@ export function tryParseJson(jsonStr) {
   try {
     let fixed = jsonStr
 
-    // Fix LaTeX-style backslash commands inside strings (e.g. \frac, \alpha)
+    // Fix LaTeX-style backslash commands inside strings (e.g. \frac, \alpha).
+    // Only operate inside quoted strings to avoid double-escaping already-valid sequences.
     fixed = fixed.replace(/"([^"]*?)"/g, (_match, content) => {
       const fixedContent = content.replace(/\\([a-zA-Z])/g, '\\\\$1')
       return `"${fixedContent}"`
-    })
-
-    // Fix other invalid escape sequences
-    fixed = fixed.replace(/\\([^"\\\/bfnrtu\n\r])/g, (match, char) => {
-      return /[a-zA-Z]/.test(char) ? '\\\\' + char : match
     })
 
     // Fix truncated arrays

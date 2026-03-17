@@ -561,17 +561,20 @@ function walkNodeForRuns(node, runs, parentStyle, iframeDoc) {
  *
  * @param {Element} el
  * @param {Document} iframeDoc
+ * @param {CSSStyleDeclaration} elStyle - already-computed style for el (avoids duplicate call)
  * @returns {Array | null}
  */
-function extractRichTextRuns(el, iframeDoc) {
-  const cs = iframeDoc.defaultView.getComputedStyle(el)
+function extractRichTextRuns(el, iframeDoc, elStyle) {
+  // Leaf nodes have no child elements — no formatting variation is possible
+  if (el.children.length === 0) return null
+
   const baseStyle = {
-    color:     rgbToHex(cs.color) || '333333',
-    bold:      parseInt(cs.fontWeight) >= 600,
-    italic:    (cs.fontStyle === 'italic' || cs.fontStyle === 'oblique'),
-    underline: (cs.textDecorationLine || cs.textDecoration || '').includes('underline'),
-    fontSize:  Math.round(parseFloat(cs.fontSize) * 72 / 96),
-    fontFace:  extractFontFamily(cs.fontFamily),
+    color:     rgbToHex(elStyle.color) || '333333',
+    bold:      parseInt(elStyle.fontWeight) >= 600,
+    italic:    (elStyle.fontStyle === 'italic' || elStyle.fontStyle === 'oblique'),
+    underline: (elStyle.textDecorationLine || elStyle.textDecoration || '').includes('underline'),
+    fontSize:  Math.round(parseFloat(elStyle.fontSize) * 72 / 96),
+    fontFace:  extractFontFamily(elStyle.fontFamily),
   }
 
   const runs = []
@@ -658,7 +661,8 @@ function extractTextElements(iframeDoc, warnings = null) {
     }
 
     // Attempt rich text extraction to preserve inline formatting (bold/italic/color/size variation)
-    const richRuns = extractRichTextRuns(el, iframeDoc)
+    // Pass the already-computed style to avoid a redundant getComputedStyle() call
+    const richRuns = extractRichTextRuns(el, iframeDoc, style)
     // Scale ratio: if calculateFontSize shrunk the base size, proportionally shrink run sizes too
     const scaleRatio = baseFontSizePt > 0 ? optimizedFontSize / baseFontSizePt : 1
 
