@@ -2,6 +2,8 @@
 
 一个强大的 HTML 演示文稿编辑器，支持 AI 生成、可视化编辑和多格式导出。
 
+![Slide X 主界面](docs/screenshots/app-overview.png)
+
 ## ✨ 主要功能
 
 - 🤖 **Slide AI**：内置 AI 助手，输入主题即可生成完整 PPT
@@ -59,6 +61,8 @@ npm start
 2. 满意后点击「✨ 确认并生成 PPT」
 3. Slide AI 将根据大纲生成完整的 HTML PPT
 
+![AI 生成演示](docs/screenshots/ai-generate.png)
+
 ### 附件上传
 
 上传文档让 AI 生成更专业、准确的内容：
@@ -75,6 +79,8 @@ npm start
 3. 悬停查看风格预览卡片（配色、布局预览）
 4. 调节色温、对比度、内容密度
 5. 点击「保存风格设置」
+
+![风格模板面板](docs/screenshots/style-templates.png)
 
 **从图片提取风格：**
 1. 点击「🖼️ 从图片提取风格」按钮
@@ -121,6 +127,8 @@ npm start
 | **PNG/JPEG** | 单张或打包下载 |
 
 **导出提示：** 可编辑 PPTX 导出完成后，如有文本缩放、图片失败等问题，会弹出详细警告提示。
+
+![导出效果对比](docs/screenshots/export-result.png)
 
 ## ⌨️ 快捷键
 
