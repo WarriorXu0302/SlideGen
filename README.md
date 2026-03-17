@@ -26,8 +26,8 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/WarriorXu0302/ppt-html-editor.git
-cd ppt-html-editor
+git clone https://github.com/WarriorXu0302/SlideGen.git
+cd SlideGen
 
 # 安装依赖
 npm install
