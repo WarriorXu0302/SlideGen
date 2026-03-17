@@ -4,6 +4,7 @@
 
 import { STYLE_TEMPLATES, getTemplateById, buildStylePrompt } from './style-templates.js'
 import { detectIntent } from './intent-detector.js'
+import { buildPrompt } from './prompt-loader.js'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,11 @@ let generationPhase = 'idle' // 'idle' | 'outline' | 'ppt'
 let cachedOutlineTextarea = null
 let cachedOutlinePreview = null
 
-// ── System Prompts ──────────────────────────────────────────────────────────
+// ── System Prompts (loaded from renderer/prompts/*.md) ───────────────────────
+
+let _promptOutline = ''
+let _promptPPT     = ''
+let _promptModify  = ''
 
 // ── Utility Functions ────────────────────────────────────────────────────────
 
@@ -53,132 +58,7 @@ const debouncedRenderOutlinePreview = debounce((markdown) => {
   renderOutlinePreview(markdown)
 }, 100)
 
-// ── System Prompts ──────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT_OUTLINE = `你是一个专业的 PPT 策划师。请根据用户主题生成 PPT 大纲。
-
-输出格式（Markdown）：
-# [PPT 标题]
-
-## 第 1 页：封面
-- 主标题
-- 副标题
-
-## 第 2 页：[页面标题]
-- 要点 1
-- 要点 2
-- 要点 3
-
-## 第 3 页：[页面标题]
-...
-
-要求：
-- 每页 3-5 个要点，内容具体、有价值
-- 内容逻辑清晰，层次分明
-- 页面标题简洁有力
-- 只输出大纲，不要任何解释`
-
-const SYSTEM_PROMPT_FULL = `你是一个顶尖的 PPT 视觉设计师。你创作的每一个作品都像是花费无数小时精心打磨，由设计领域最顶尖的大师亲手制作。
-
-## 设计哲学（核心理念）
-
-你的作品不是"幻灯片"，而是视觉艺术品。每一页都应该：
-- 像博物馆级海报一样精致
-- 通过空间、形式、色彩传达信息，而非堆砌文字
-- 展现"专家级工艺"——每个元素的位置、大小、颜色都经过深思熟虑
-
-## 输出格式
-
-严格遵守以下结构规范，每页用 <section data-slide="N" data-title="页面标题"> 包裹：
-
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-  body { margin: 0; padding: 0; }
-  section[data-slide] {
-    width: ${SLIDE_WIDTH}px;
-    height: ${SLIDE_HEIGHT}px;
-    position: relative;
-    overflow: hidden;
-    display: none;
-  }
-</style>
-</head>
-<body>
-  <section data-slide="1" data-title="封面">...</section>
-  <section data-slide="2" data-title="...">...</section>
-</body>
-</html>
-
-## 视觉设计规范（严格遵守）
-
-### 配色哲学
-- 选择与主题内容深度匹配的配色，展现"色彩作为信息系统"的理念
-- 一种主色占 60-70% 视觉权重，1-2 种辅色，一种点睛强调色
-- 封面和结语页使用深色背景，内容页可使用浅色背景形成"三明治"结构
-- 色彩对比必须强烈有力，绝不使用 timid（怯懦）的平均分布配色
-
-### 布局哲学
-- 每页都是独特的构图，绝不重复相同排版
-- 拥抱非对称、对角线流动、网格突破、大胆留白
-- 可用布局：双栏（文字左/图示右）、图标+文字行、2x2或2x3网格卡片、半出血图片+内容叠加
-- 数据展示：大号数字统计（60-72pt 数字+小标签）、对比栏、时间线/流程图
-
-### 视觉元素
-- 每页必须有视觉元素作为"锚点"——色块、几何图形、渐变、图标符号
-- 使用 CSS 渐变创造深度和氛围：径向渐变、线性渐变、网格背景
-- 可用技法：噪点纹理（通过 SVG filter）、几何图案、层叠透明度、戏剧性阴影
-- 标题字号 44-52px，正文 16-20px，说明文字 12-14px
-
-### 文字即设计
-- 文字是视觉元素的一部分，不是信息的堆砌
-- 每页文字极简：核心观点 1-3 个，绝不写长段落
-- 列表项用图标或数字替代普通项目符号
-- 大号关键词 > 小号解释文字，形成视觉层次
-
-### 绝对禁止
-- ❌ 标题下方画横线/装饰线（这是 AI 生成的明显特征）
-- ❌ 纯文字页面（每页必须有视觉元素）
-- ❌ 正文居中对齐（列表和段落必须左对齐）
-- ❌ 所有页面使用相同布局（单调是业余的标志）
-- ❌ 引用任何外部资源（无外链字体、图片用 CSS 渐变/几何图形代替）
-- ❌ 低对比度文字（浅色背景上不用浅灰文字）
-- ❌ 使用 Inter、Roboto、Arial 等通用字体描述（因为是 HTML，使用系统字体即可）
-- ❌ 紫色渐变配白底（这是 AI 生成的陈词滥调）
-
-### 技术要求
-- 每页固定尺寸 ${SLIDE_WIDTH}×${SLIDE_HEIGHT}px，position: relative，overflow: hidden
-- 使用内联 CSS，style 写在 <head> 或元素上
-- 只输出完整 HTML 代码，不要任何解释文字
-- 所有视觉效果用纯 CSS 实现：渐变、阴影、圆角、变换
-
-## 大师级工艺检查
-
-生成前自问：
-1. 这看起来像是花了无数小时打磨的作品吗？
-2. 每个元素的位置都是有意为之吗？
-3. 色彩搭配会让人印象深刻吗？
-4. 布局够大胆、够独特吗？
-
-只有当能回答"是"时，才输出最终作品。
-
-## 语义标注（必须遵守）
-
-关键元素必须添加 data-role 属性，方便结构化导出：
-- 页面主标题：data-role="title"
-- 副标题/章节标题：data-role="subtitle"
-- 正文/要点内容：data-role="body"
-- 数据图表容器（canvas/svg/图表div）：data-role="chart"
-- 演讲者备注（隐藏元素）：data-role="notes" style="display:none"
-
-每页必须有且只有一个 data-role="title" 元素。
-每页在 section 末尾添加一个 data-role="notes" 的隐藏 div，内容为该页的演讲要点（2-3句话）。`
-
-const SYSTEM_PROMPT_MODIFY = `你是一个专业的前端开发者，擅长修改 HTML PPT 幻灯片。
-用户会给你一段幻灯片的 HTML 代码，以及修改指令。
-请按指令修改 HTML，保持外层结构不变，宽度保持 ${SLIDE_WIDTH}px，高度保持 ${SLIDE_HEIGHT}px。
-只输出修改后的完整 HTML 代码，不要任何解释。`
 
 // ── Init ────────────────────────────────────────────────────────────────────
 
@@ -261,6 +141,18 @@ export async function initAIPanel({ onGenerate, onModify, getAppState }) {
   const config = await window.electronAPI.getConfig()
   applyConfigToForms(config)
   loadMemoryList()
+
+  // Preload system prompts from markdown files (non-blocking, cached)
+  const vars = { SLIDE_WIDTH, SLIDE_HEIGHT }
+  try {
+    ;[_promptOutline, _promptPPT, _promptModify] = await Promise.all([
+      buildPrompt('outline-system', vars),
+      buildPrompt('ppt-system', vars),
+      buildPrompt('modify-system', vars),
+    ])
+  } catch (err) {
+    console.error('Failed to load prompts from files, app may not generate correctly:', err)
+  }
 }
 
 // ── Tab Switching ───────────────────────────────────────────────────────────
@@ -374,7 +266,7 @@ async function handleGenerateOutline() {
   setOutlineEditMode(false)
 
   try {
-    const outline = await streamCompletion(config, SYSTEM_PROMPT_OUTLINE, userPrompt, (chunk, total) => {
+    const outline = await streamCompletion(config, _promptOutline, userPrompt, (chunk, total) => {
       // Real-time update outline
       currentOutline += chunk
       const cleanOutline = cleanMarkdownFences(currentOutline)
@@ -598,7 +490,7 @@ async function handleModify() {
   showProgress('正在修改幻灯片...')
 
   try {
-    const html = await streamCompletion(config, SYSTEM_PROMPT_MODIFY, userPrompt, (chunk, total) => {
+    const html = await streamCompletion(config, _promptModify, userPrompt, (chunk, total) => {
       showProgress(`正在修改... ${total} 字符`)
     })
 
@@ -717,8 +609,8 @@ function buildGeneratePrompt(topic, pages, lang, memoryContent, styleId, stylePa
 function buildSystemPromptWithStyle(styleId) {
   const template = getTemplateById(styleId)
 
-  // Base prompt
-  const prompt = SYSTEM_PROMPT_FULL
+  // Base prompt (loaded from prompts/ppt-system.md)
+  const prompt = _promptPPT
 
   if (!template) return prompt
 

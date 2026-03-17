@@ -495,6 +495,105 @@ function extractColorFromStop(stopStr) {
 }
 
 /**
+ * Walk a DOM node tree and collect rich text runs compatible with pptxgenjs.
+ *
+ * Inspired by OpenMAIC lib/export/use-export-pptx.ts formatHTML().
+ * Works directly on the live DOM (no AST required) since we have the iframe.
+ *
+ * @param {Node} node
+ * @param {Array} runs  — accumulated array of { text, options }
+ * @param {Object} parentStyle  — inherited style object
+ * @param {Document} iframeDoc
+ */
+function walkNodeForRuns(node, runs, parentStyle, iframeDoc) {
+  if (node.nodeType === 3 /* TEXT_NODE */) {
+    const text = node.textContent
+    if (text) runs.push({ text, options: { ...parentStyle } })
+    return
+  }
+  if (node.nodeType !== 1 /* ELEMENT_NODE */) return
+
+  const tag = node.tagName.toLowerCase()
+  if (tag === 'script' || tag === 'style') return
+
+  const cs = iframeDoc.defaultView.getComputedStyle(node)
+  if (cs.display === 'none' || cs.visibility === 'hidden') return
+
+  // Build style for this node, inheriting from parent
+  const style = { ...parentStyle }
+
+  // Semantic tag overrides
+  if (tag === 'b' || tag === 'strong') style.bold = true
+  if (tag === 'i' || tag === 'em')     style.italic = true
+  if (tag === 'u')                     style.underline = true
+
+  // Computed style overrides (more specific than tag semantics)
+  const fw = parseInt(cs.fontWeight)
+  if (!isNaN(fw)) style.bold = fw >= 600
+  if (cs.fontStyle === 'italic' || cs.fontStyle === 'oblique') style.italic = true
+  const textDec = cs.textDecorationLine || cs.textDecoration || ''
+  if (textDec.includes('underline')) style.underline = true
+
+  const color = rgbToHex(cs.color)
+  if (color) style.color = color
+
+  const fsPx = parseFloat(cs.fontSize)
+  if (fsPx > 0) style.fontSize = Math.round(fsPx * 72 / 96)
+
+  const ff = extractFontFamily(cs.fontFamily)
+  if (ff) style.fontFace = ff
+
+  // Block-level tags inject a line break before their content
+  const isBlock = ['div', 'p', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br', 'tr'].includes(tag)
+  if (isBlock && runs.length > 0) {
+    runs[runs.length - 1].options.breakLine = true
+  }
+
+  for (const child of node.childNodes) {
+    walkNodeForRuns(child, runs, style, iframeDoc)
+  }
+}
+
+/**
+ * Extract rich text runs from an element for use with pptxgenjs addText().
+ * Returns null when the element has no meaningful inline formatting variation
+ * (plain text is sufficient in that case).
+ *
+ * @param {Element} el
+ * @param {Document} iframeDoc
+ * @returns {Array | null}
+ */
+function extractRichTextRuns(el, iframeDoc) {
+  const cs = iframeDoc.defaultView.getComputedStyle(el)
+  const baseStyle = {
+    color:     rgbToHex(cs.color) || '333333',
+    bold:      parseInt(cs.fontWeight) >= 600,
+    italic:    (cs.fontStyle === 'italic' || cs.fontStyle === 'oblique'),
+    underline: (cs.textDecorationLine || cs.textDecoration || '').includes('underline'),
+    fontSize:  Math.round(parseFloat(cs.fontSize) * 72 / 96),
+    fontFace:  extractFontFamily(cs.fontFamily),
+  }
+
+  const runs = []
+  walkNodeForRuns(el, runs, baseStyle, iframeDoc)
+
+  // Filter empty runs
+  const nonEmpty = runs.filter(r => r.text.trim().length > 0)
+  if (nonEmpty.length === 0) return null
+
+  // Only return as rich runs when there IS formatting variation between runs
+  // (avoids overhead for plain single-style elements)
+  const hasVariation = nonEmpty.some(r =>
+    r.options.bold      !== baseStyle.bold      ||
+    r.options.italic    !== baseStyle.italic    ||
+    r.options.underline !== baseStyle.underline ||
+    r.options.color     !== baseStyle.color     ||
+    r.options.fontSize  !== baseStyle.fontSize
+  )
+  return hasVariation ? nonEmpty : null
+}
+
+/**
  * Extract text elements with improved styling
  */
 function extractTextElements(iframeDoc, warnings = null) {
@@ -558,10 +657,17 @@ function extractTextElements(iframeDoc, warnings = null) {
       warnings.addTextScaled(text, baseFontSizePt, optimizedFontSize)
     }
 
+    // Attempt rich text extraction to preserve inline formatting (bold/italic/color/size variation)
+    const richRuns = extractRichTextRuns(el, iframeDoc)
+    // Scale ratio: if calculateFontSize shrunk the base size, proportionally shrink run sizes too
+    const scaleRatio = baseFontSizePt > 0 ? optimizedFontSize / baseFontSizePt : 1
+
     elements.push({
       type: 'text',
       role: role || null,
       text,
+      richRuns,   // Array<{text, options}> or null (null = use plain text fallback)
+      scaleRatio,
       x: Math.max(0, rect.left / SLIDE_W * PPT_W),
       y: Math.max(0, rect.top / SLIDE_H * PPT_H),
       w: Math.min(Math.max(0.2, rect.width / SLIDE_W * PPT_W), PPT_W),
@@ -984,7 +1090,23 @@ async function exportEditablePPTX(slides, indices) {
           fontFace: el.fontFace,
           wrap: true,
         }
-        slide.addText(el.text, textOpts)
+
+        if (el.richRuns && el.richRuns.length > 0) {
+          // Rich text: scale each run's fontSize by the same ratio used for the container
+          const scaledRuns = el.richRuns.map(run => ({
+            text: run.text,
+            options: {
+              ...run.options,
+              fontSize: run.options.fontSize
+                ? Math.max(8, Math.round(run.options.fontSize * el.scaleRatio))
+                : el.fontSize,
+              underline: run.options.underline ? { style: 'sng' } : undefined,
+            },
+          }))
+          slide.addText(scaledRuns, textOpts)
+        } else {
+          slide.addText(el.text, textOpts)
+        }
       } catch (e) {
         console.warn('Failed to add text:', e)
         warnings.addTextFailed(el.text, e.message)
