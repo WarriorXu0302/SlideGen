@@ -602,8 +602,11 @@ function scalePreview() {
   wrapper.style.overflow = 'hidden'
 }
 
+let _resizeTimer = null
 window.addEventListener('resize', () => {
-  if (state.slides.length > 0) scalePreview()
+  if (state.slides.length === 0) return
+  clearTimeout(_resizeTimer)
+  _resizeTimer = setTimeout(scalePreview, 100)
 })
 
 // ── Navigation ────────────────────────────────────────────────────────────
